@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <RootNamespace>EasyerLauncher</RootNamespace>
+    <AssemblyName>EasyerLauncher</AssemblyName>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Version>1.0.0</Version>
+    <AssemblyTitle>Easyer Launcher 1</AssemblyTitle>
+    <Product>Easyer Launcher</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EasyerLauncher.Core\EasyerLauncher.Core.vbproj" />
+  </ItemGroup>
+
+</Project>

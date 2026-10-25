@@ -1,0 +1,16 @@
+# .NET
+bin/
+obj/
+out/
+.vs/
+*.user
+*.suo
+*.userosscache
+
+# 运行时产物
+*.log
+easyer-config.json
+
+# 系统文件
+Thumbs.db
+Desktop.ini
