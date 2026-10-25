@@ -1,23 +1,59 @@
 Imports System.Net.Http
 Imports System.Text
 Imports System.Text.Json
+Imports System.Threading
 
 Namespace Net
 
     ''' <summary>全局 HttpClient 与下载工具。</summary>
     Public Class Http
 
-        Public Shared ReadOnly Client As New HttpClient With {
-            .Timeout = TimeSpan.FromMinutes(10)
-        }
+        ''' <summary>长超时客户端：大文件下载用。</summary>
+        Public Shared ReadOnly Client As HttpClient
+
+        ''' <summary>短超时客户端：API 请求 / 图标等小资源，防止界面卡死在"搜索中"。</summary>
+        Public Shared ReadOnly ApiClient As HttpClient
 
         Shared Sub New()
-            Client.DefaultRequestHeaders.UserAgent.ParseAdd("EasyerLauncher/1.0 (Minecraft Launcher)")
+            ' 显式跟随环境代理（与 curl 行为一致），避免系统代理端口失效时请求挂死
+            Dim proxyUrl = Environment.GetEnvironmentVariable("HTTPS_PROXY")
+            If String.IsNullOrEmpty(proxyUrl) Then proxyUrl = Environment.GetEnvironmentVariable("https_proxy")
+            If String.IsNullOrEmpty(proxyUrl) Then proxyUrl = Environment.GetEnvironmentVariable("HTTP_PROXY")
+            If String.IsNullOrEmpty(proxyUrl) Then proxyUrl = Environment.GetEnvironmentVariable("http_proxy")
+
+            Dim ua = "EasyerLauncher/1.0 (Minecraft Launcher)"
+            If Not String.IsNullOrEmpty(proxyUrl) Then
+                Dim handler As New HttpClientHandler With {.Proxy = New System.Net.WebProxy(proxyUrl), .UseProxy = True}
+                Client = New HttpClient(handler) With {.Timeout = TimeSpan.FromMinutes(10)}
+                ApiClient = New HttpClient(handler) With {.Timeout = TimeSpan.FromSeconds(15)}
+            Else
+                Client = New HttpClient With {.Timeout = TimeSpan.FromMinutes(10)}
+                ApiClient = New HttpClient With {.Timeout = TimeSpan.FromSeconds(15)}
+            End If
+            Client.DefaultRequestHeaders.UserAgent.ParseAdd(ua)
+            ApiClient.DefaultRequestHeaders.UserAgent.ParseAdd(ua)
         End Sub
 
-        ''' <summary>GET 文本内容。</summary>
-        Public Shared Function GetString(url As String) As String
-            Return Client.GetStringAsync(url).GetAwaiter().GetResult()
+        ''' <summary>GET 并自动重试一次（对付代理偶发挂起）。</summary>
+        Public Shared Function GetString(url As String, Optional timeoutSec As Integer = 20) As String
+            Try
+                Return GetStringOnce(url, timeoutSec)
+            Catch ex As Exception When TypeOf ex Is OperationCanceledException OrElse
+                                       ex.InnerException IsNot Nothing AndAlso TypeOf ex.InnerException Is OperationCanceledException
+                ' 超时 → 重试一次
+                Return GetStringOnce(url, timeoutSec)
+            End Try
+        End Function
+
+        Private Shared Function GetStringOnce(url As String, timeoutSec As Integer) As String
+            Using cts As New CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec))
+                Using req As New HttpRequestMessage(HttpMethod.Get, url)
+                    Using resp = Client.SendAsync(req, HttpCompletionOption.ResponseContentRead, cts.Token).GetAwaiter().GetResult()
+                        resp.EnsureSuccessStatusCode()
+                        Return resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                    End Using
+                End Using
+            End Using
         End Function
 
         ''' <summary>GET 并解析为 JsonDocument（调用方负责 Dispose）。</summary>

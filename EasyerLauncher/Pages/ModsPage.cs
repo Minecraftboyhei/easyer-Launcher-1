@@ -42,6 +42,8 @@ namespace EasyerLauncher.Pages
 
         private ModrinthClient.ContentType CurrentType => _types[Array.IndexOf(_chips, _chips.First(c => c.Selected))];
 
+        private int _searchGen;   // 搜索代数：丢弃过期结果，防止快速点击时互相覆盖
+
         private void Build()
         {
             Controls.Add(PageUtil.Title("模组 / 资源"));
@@ -62,7 +64,11 @@ namespace EasyerLauncher.Pages
                 };
                 chip.Click += (s, e) =>
                 {
-                    for (int j = 0; j < _chips.Length; j++) _chips[j].Selected = j == idx;
+                    for (int j = 0; j < _chips.Length; j++)
+                    {
+                        _chips[j].Selected = j == idx;
+                        _chips[j].Invalidate();
+                    }
                     _ = Search(_search.Text.Trim());
                 };
                 _chips[i] = chip;
@@ -125,18 +131,24 @@ namespace EasyerLauncher.Pages
 
         private async Task Search(string query)
         {
+            int gen = ++_searchGen;
             _main.SetStatus("搜索中 ...");
             _flow.Controls.Clear();
+
+            var hint = Controls.Find("countHint", true).FirstOrDefault() as Label;
+            if (hint != null) hint.Text = "";
+
             try
             {
                 var t = CurrentType;
                 var gameVer = GameVerFilter();
                 var results = await Task.Run(() => ModrinthClient.Search(query, t, gameVer, null, 30));
+                if (gen != _searchGen || IsDisposed) return;   // 已有更新的搜索，丢弃这批
 
-                var hint = Controls.Find("countHint", true).FirstOrDefault() as Label;
                 if (hint != null)
                     hint.Text = results.Count + " 条结果" + (gameVer != null ? "（按 " + gameVer + " 过滤）" : "");
 
+                _flow.SuspendLayout();
                 foreach (var r in results)
                 {
                     var card = new ContentCard
@@ -153,13 +165,16 @@ namespace EasyerLauncher.Pages
                         OnOpen = () => ShowDetail(r, t),
                         OnAction = () => ShowDetail(r, t)
                     };
-                    card.LoadIcon(() => { if (!IsDisposed) card.Invalidate(); });
                     _flow.Controls.Add(card);
+                    card.LoadIcon(null);
                 }
+                _flow.ResumeLayout(true);
                 _main.SetStatus("搜索完成");
             }
             catch (Exception ex)
             {
+                if (gen != _searchGen || IsDisposed) return;
+                if (hint != null) hint.Text = "";
                 _main.SetStatus("搜索失败：" + ex.Message);
             }
         }

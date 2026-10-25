@@ -72,7 +72,7 @@ namespace EasyerLauncher
                 foreach (var key in new[] { "home", "download", "mods", "loaders" })
                 {
                     Navigate(key);
-                    await System.Threading.Tasks.Task.Delay(2500);
+                    await System.Threading.Tasks.Task.Delay(key == "mods" || key == "download" ? 4500 : 2000);
                     using var bmp = new Bitmap(Width, Height);
                     DrawToBitmap(bmp, new Rectangle(0, 0, Width, Height));
                     bmp.Save(System.IO.Path.Combine(dir, key + ".png"));
@@ -178,6 +178,12 @@ namespace EasyerLauncher
         {
             CurrentPage = key;
             Content.Controls.Clear();
+            if (_pageHost != null)
+            {
+                try { _pageHost.Controls.Clear(); _pageHost.Dispose(); } catch { }
+                _pageHost = null;
+            }
+            _navAnim?.Stop();
 
             if (!Pages.ContainsKey(key))
             {
@@ -196,13 +202,39 @@ namespace EasyerLauncher
 
             var p = Pages[key];
             p.Dock = DockStyle.Fill;
-            Content.Controls.Add(p);
+            _pageHost = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background, Padding = new Padding(0, 34, 0, 0) };
+            _pageHost.Controls.Add(p);
+            Content.Controls.Add(_pageHost);
             Theme.ApplyTo(p);
             p.Invalidate();
+            AnimatePageIn(_pageHost);
 
             for (int i = 0; i < NavButtons.Length; i++)
                 NavButtons[i].Selected = Nav[i].Key == key;
             foreach (var b in NavButtons) b.Invalidate();
+        }
+
+        private System.Windows.Forms.Timer _navAnim;
+        private Panel _pageHost;
+
+        /// <summary>页面滑入动画（ease-out，约 170ms）。</summary>
+        private void AnimatePageIn(Panel host)
+        {
+            const int startY = 34;
+            const int frames = 12;
+            int frame = 0;
+            _navAnim?.Dispose();
+            _navAnim = new System.Windows.Forms.Timer { Interval = 14 };
+            _navAnim.Tick += (s, e) =>
+            {
+                if (host.IsDisposed) { _navAnim.Stop(); _navAnim.Dispose(); return; }
+                frame++;
+                float p = Math.Min(1f, frame / (float)frames);
+                float ease = 1f - (1f - p) * (1f - p);   // ease-out quad
+                host.Padding = new Padding(0, (int)Math.Round(startY * (1f - ease)), 0, 0);
+                if (p >= 1f) { _navAnim.Stop(); _navAnim.Dispose(); }
+            };
+            _navAnim.Start();
         }
 
         /// <summary>启动游戏（主页按钮触发）。</summary>

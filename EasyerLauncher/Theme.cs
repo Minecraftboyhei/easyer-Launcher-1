@@ -156,6 +156,29 @@ namespace EasyerLauncher
         };
 
         // ===== 通用工具 =====
+        /// <summary>解析控件背后实际可见的背景色（跳过透明父级）。</summary>
+        internal static Color BackdropOf(Control c)
+        {
+            for (var p = c.Parent; p != null; p = p.Parent)
+            {
+                if (p is W11Card || p is ContentCard || p is VersionCard) return Card;
+                var bc = p.BackColor;
+                if (bc.A == 255) return bc;
+            }
+            return Background;
+        }
+
+        /// <summary>颜色插值（t: 0→a, 1→b）。</summary>
+        public static Color Lerp(Color a, Color b, float t)
+        {
+            t = Math.Max(0f, Math.Min(1f, t));
+            return Color.FromArgb(
+                (int)(a.A + (b.A - a.A) * t),
+                (int)(a.R + (b.R - a.R) * t),
+                (int)(a.G + (b.G - a.G) * t),
+                (int)(a.B + (b.B - a.B) * t));
+        }
+
         internal static GraphicsPath RoundedPath(Rectangle r, int radius)
         {
             var path = new GraphicsPath();
@@ -166,6 +189,46 @@ namespace EasyerLauncher
             path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
             path.CloseFigure();
             return path;
+        }
+
+        /// <summary>悬停/选中渐变动画器（16ms 步进，ease 风格趋近目标值）。</summary>
+        internal class HoverAnimator : IDisposable
+        {
+            private readonly Control _c;
+            private readonly System.Windows.Forms.Timer _t;
+            private float _target;
+
+            public float Value;
+
+            public HoverAnimator(Control c)
+            {
+                _c = c;
+                _t = new System.Windows.Forms.Timer { Interval = 16 };
+                _t.Tick += Step;
+                c.Disposed += (s, e) => Dispose();
+            }
+
+            public void To(float target)
+            {
+                _target = target;
+                _t.Start();
+            }
+
+            private void Step(object s, EventArgs e)
+            {
+                Value += (_target - Value) * 0.22f;
+                if (Math.Abs(_target - Value) < 0.02f)
+                {
+                    Value = _target;
+                    _t.Stop();
+                }
+                if (!_c.IsDisposed) _c.Invalidate();
+            }
+
+            public void Dispose()
+            {
+                try { _t?.Dispose(); } catch { }
+            }
         }
 
         public static Color Parse(string hex, Color fallback)
@@ -196,6 +259,7 @@ namespace EasyerLauncher
         public bool Selected = false;
         public string IconGlyph = "";
         public ContentAlignment MyTextAlign = ContentAlignment.MiddleCenter;
+        private readonly Theme.HoverAnimator _anim;
         private bool _hover;
         private bool _down;
 
@@ -207,10 +271,11 @@ namespace EasyerLauncher
             Font = Theme.BodyFont;
             Cursor = Cursors.Hand;
             Height = 36;
+            _anim = new Theme.HoverAnimator(this);
         }
 
-        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { _hover = false; _down = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; _anim.To(1f); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; _down = false; _anim.To(0f); base.OnMouseLeave(e); }
         protected override void OnMouseDown(MouseEventArgs e) { _down = true; Invalidate(); base.OnMouseDown(e); }
         protected override void OnMouseUp(MouseEventArgs e) { _down = false; Invalidate(); base.OnMouseUp(e); }
 
@@ -218,7 +283,7 @@ namespace EasyerLauncher
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.Clear(Parent?.BackColor ?? Theme.Background);
+            g.Clear(Theme.BackdropOf(this));
 
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
             int radius = ButtonKind == Kind.Nav || ButtonKind == Kind.Chip ? Height / 2 : 8;
@@ -227,27 +292,31 @@ namespace EasyerLauncher
                 Color fill;
                 Color text;
 
+                float t = _anim.Value;
+                if (_down) t = 1f;
+
                 switch (ButtonKind)
                 {
                     case Kind.Accent:
-                        fill = _down ? ControlPaint.Dark(Theme.Accent, 0.12f) : _hover ? Theme.AccentHover : Theme.Accent;
+                        fill = Theme.Lerp(Theme.Accent, Theme.AccentHover, t);
                         text = Theme.AccentText;
                         break;
                     case Kind.Ghost:
-                        fill = _down ? Theme.CardHover : _hover ? Theme.Card : Color.Transparent;
+                        fill = Theme.Lerp(Color.Transparent, Theme.Card, t);
                         text = Theme.Foreground;
                         break;
                     case Kind.Nav:
-                        fill = Selected ? (_hover ? Theme.CardHover : Theme.Card) : _hover ? Theme.CardHover : Color.Transparent;
+                        fill = Selected ? Theme.Lerp(Theme.Card, Theme.CardHover, t)
+                                        : Theme.Lerp(Color.Transparent, Theme.CardHover, t);
                         text = Selected ? Theme.Accent : Theme.Foreground;
                         break;
                     case Kind.Chip:
-                        fill = Selected ? (_down ? ControlPaint.Dark(Theme.Accent, 0.12f) : _hover ? Theme.AccentHover : Theme.Accent)
-                                        : _down ? Theme.CardHover : _hover ? Theme.Card : Theme.Input;
+                        fill = Selected ? Theme.Lerp(Theme.Accent, Theme.AccentHover, t)
+                                        : Theme.Lerp(Theme.Input, Theme.Card, t);
                         text = Selected ? Theme.AccentText : Theme.Foreground;
                         break;
                     default:
-                        fill = _down ? Theme.CardHover : _hover ? Theme.Card : Theme.Input;
+                        fill = Theme.Lerp(Theme.Input, Theme.Card, t);
                         text = Theme.Foreground;
                         break;
                 }
@@ -323,7 +392,7 @@ namespace EasyerLauncher
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.Clear(Parent?.BackColor ?? Theme.Background);
+            g.Clear(Theme.BackdropOf(this));
             using (var path = Theme.RoundedPath(new Rectangle(0, 0, Width - 1, Height - 1), 12))
             {
                 using (var b = new SolidBrush(Theme.Card)) g.FillPath(b, path);
@@ -371,7 +440,7 @@ namespace EasyerLauncher
             return bmp;
         }
 
-        /// <summary>异步加载网络图标，回调可能在后台线程触发（内部会 BeginInvoke 由调用方处理）。</summary>
+        /// <summary>异步加载网络图标，回调内部自动回 UI 线程。</summary>
         public static void Get(string url, string key, Action<Image> done)
         {
             if (string.IsNullOrEmpty(url)) { done(null); return; }
@@ -388,19 +457,54 @@ namespace EasyerLauncher
                     var file = Path.Combine(dir, Sanitize(key) + ".img");
                     if (!File.Exists(file))
                     {
-                        var bytes = EasyerLauncher.Core.Net.Http.Client.GetByteArrayAsync(url).GetAwaiter().GetResult();
+                        var bytes = EasyerLauncher.Core.Net.Http.ApiClient.GetByteArrayAsync(url).GetAwaiter().GetResult();
                         File.WriteAllBytes(file, bytes);
                     }
-                    using (var fs = File.OpenRead(file))
-                    using (var raw = Image.FromStream(fs))
+                    Image decoded = TryDecode(file);
+                    if (decoded == null) throw new Exception("无法解码图片: " + url);
+                    using (decoded)
                     {
-                        var scaled = new Bitmap(raw, 96, 96);
+                        var scaled = new Bitmap(decoded, 96, 96);
                         lock (_lock) { _cache[key] = scaled; }
                         done(scaled);
                     }
                 }
                 catch { done(null); }
             });
+        }
+
+        /// <summary>GDI+ 优先解码；失败（如 webp）走 WIC 兜底。</summary>
+        private static Image TryDecode(string path)
+        {
+            try
+            {
+                return Image.FromFile(path);
+            }
+            catch
+            {
+                try
+                {
+                    var fs = new FileStream(path, FileMode.Open, FileAccess.Read);
+                    var dec = System.Windows.Media.Imaging.BitmapDecoder.Create(fs,
+                        System.Windows.Media.Imaging.BitmapCreateOptions.None,
+                        System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+                    var frame = dec.Frames[0];
+                    var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(
+                        frame, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                    int w = converted.PixelWidth, h = converted.PixelHeight;
+                    var pixels = new byte[w * h * 4];
+                    converted.CopyPixels(pixels, w * 4, 0);
+                    var bmp = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    var bd = bmp.LockBits(new Rectangle(0, 0, w, h),
+                        System.Drawing.Imaging.ImageLockMode.WriteOnly,
+                        System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    Marshal.Copy(pixels, 0, bd.Scan0, pixels.Length);
+                    bmp.UnlockBits(bd);
+                    fs.Dispose();
+                    return bmp;
+                }
+                catch { return null; }
+            }
         }
 
         private static string Sanitize(string s)
@@ -423,6 +527,7 @@ namespace EasyerLauncher
         public Action OnAction;          // "获取" 按钮回调
         public Action OnOpen;            // 点卡片本体回调
 
+        private readonly Theme.HoverAnimator _anim;
         private bool _hover;
         private Image _icon;
         private Rectangle _actionRect;
@@ -433,26 +538,34 @@ namespace EasyerLauncher
                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             Cursor = Cursors.Hand;
             Size = new Size(310, 118);
+            _anim = new Theme.HoverAnimator(this);
         }
 
         public void LoadIcon(Action invalidate)
         {
-            if (string.IsNullOrEmpty(IconUrl)) return;
+            if (string.IsNullOrEmpty(IconUrl))
+            {
+                // 无图标：本地生成首字母占位图
+                var letter = string.IsNullOrEmpty(CardTitle) ? "?" : CardTitle.Substring(0, 1).ToUpper();
+                _icon = IconCache.Placeholder(letter[0]);
+                if (!IsDisposed) Invalidate();
+                return;
+            }
             IconCache.Get(IconUrl, IconKey, img =>
             {
+                if (IsDisposed || !IsHandleCreated) return;
                 _icon = img;
-                invalidate();
+                try { BeginInvoke(new Action(() => { if (!IsDisposed) Invalidate(); })); } catch { }
             });
         }
 
-        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; _anim.To(1f); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; _anim.To(0f); base.OnMouseLeave(e); }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            var overAction = _actionRect.Contains(e.Location);
-            Cursor = overAction ? Cursors.Hand : Cursors.Hand;
+            Cursor = _actionRect.Contains(e.Location) ? Cursors.Hand : Cursors.Hand;
         }
 
         protected override void OnMouseClick(MouseEventArgs e)
@@ -466,13 +579,14 @@ namespace EasyerLauncher
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.Clear(Parent?.BackColor ?? Theme.Background);
+            g.Clear(Theme.BackdropOf(this));
 
+            float t = _anim.Value;
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
             using (var path = Theme.RoundedPath(rect, 12))
             {
-                using (var b = new SolidBrush(_hover ? Theme.CardHover : Theme.Card)) g.FillPath(b, path);
-                using (var pen = new Pen(_hover ? Theme.Accent : Theme.Border)) g.DrawPath(pen, path);
+                using (var b = new SolidBrush(Theme.Lerp(Theme.Card, Theme.CardHover, t))) g.FillPath(b, path);
+                using (var pen = new Pen(Theme.Lerp(Theme.Border, Theme.Accent, t))) g.DrawPath(pen, path);
             }
 
             // 图标（圆角裁剪）
@@ -512,9 +626,9 @@ namespace EasyerLauncher
             var btn = new Rectangle(Width - 68, 16, 54, 26);
             _actionRect = btn;
             using (var bpath = Theme.RoundedPath(btn, 13))
-            using (var b = new SolidBrush(_hover ? Theme.Accent : Theme.Input))
+            using (var b = new SolidBrush(Theme.Lerp(Theme.Input, Theme.Accent, t)))
                 g.FillPath(b, bpath);
-            TextRenderer.DrawText(g, "获取", Theme.SmallFont, btn, _hover ? Theme.AccentText : Theme.Foreground,
+            TextRenderer.DrawText(g, "获取", Theme.SmallFont, btn, Theme.Lerp(Theme.Foreground, Theme.AccentText, t),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
     }
@@ -528,6 +642,7 @@ namespace EasyerLauncher
         public string DateStr = "";
         public Action OnInstall;
 
+        private readonly Theme.HoverAnimator _anim;
         private bool _hover;
 
         public VersionCard()
@@ -536,10 +651,11 @@ namespace EasyerLauncher
                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             Cursor = Cursors.Hand;
             Size = new Size(228, 84);
+            _anim = new Theme.HoverAnimator(this);
         }
 
-        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; _anim.To(1f); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; _anim.To(0f); base.OnMouseLeave(e); }
         protected override void OnMouseClick(MouseEventArgs e)
         {
             base.OnMouseClick(e);
@@ -550,13 +666,14 @@ namespace EasyerLauncher
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.Clear(Parent?.BackColor ?? Theme.Background);
+            g.Clear(Theme.BackdropOf(this));
 
+            float t = _anim.Value;
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
             using (var path = Theme.RoundedPath(rect, 12))
             {
-                using (var b = new SolidBrush(_hover ? Theme.CardHover : Theme.Card)) g.FillPath(b, path);
-                using (var pen = new Pen(_hover ? Theme.Accent : Theme.Border)) g.DrawPath(pen, path);
+                using (var b = new SolidBrush(Theme.Lerp(Theme.Card, Theme.CardHover, t))) g.FillPath(b, path);
+                using (var pen = new Pen(Theme.Lerp(Theme.Border, Theme.Accent, t))) g.DrawPath(pen, path);
             }
 
             // 类型徽章
