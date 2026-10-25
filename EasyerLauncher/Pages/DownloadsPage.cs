@@ -53,7 +53,11 @@ namespace EasyerLauncher.Pages
                 };
                 chip.Click += (s, e) =>
                 {
-                    for (int j = 0; j < _chips.Length; j++) _chips[j].Selected = j == idx;
+                    for (int j = 0; j < _chips.Length; j++)
+                    {
+                        _chips[j].Selected = j == idx;
+                        _chips[j].Invalidate();
+                    }
                     ApplyFilter();
                 };
                 _chips[i] = chip;
@@ -146,24 +150,9 @@ namespace EasyerLauncher.Pages
 
         private void Install(string id)
         {
-            if (MessageBox.Show("下载安装 " + id + " ？\n（客户端 + 库 + 资源文件，全部自动）", "Easyer",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-
-            _main.SetStatus("开始安装 " + id + " ...");
-            Task.Run(() =>
-            {
-                try
-                {
-                    GameInstaller.Install(id, _main.Cfg.GameDirectory, msg => _main.SetStatus("[" + id + "] " + msg));
-                    _main.SetStatus(id + " 安装完成 ✓");
-                    MessageBox.Show(id + " 安装完成！", "Easyer", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                catch (Exception ex)
-                {
-                    _main.SetStatus(id + " 安装失败：" + ex.Message);
-                    MessageBox.Show("安装失败：\n" + ex.Message, "Easyer", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            });
+            // PCL 式：弹窗选加载器（原版 / Fabric / Quilt / NeoForge / Forge）
+            using (var dlg = new InstallPickForm(_main, id))
+                dlg.ShowDialog(FindForm());
         }
     }
 }

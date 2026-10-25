@@ -8,21 +8,23 @@ using EasyerLauncher.Core.Minecraft;
 
 namespace EasyerLauncher.Pages
 {
-    /// <summary>加载器：三大图形化加载器卡片 + 选中后展开安装面板。</summary>
+    /// <summary>加载器：四张图形化加载器卡片 + 选中后展开安装面板（版本列表式选择）。</summary>
     public class LoadersPage : Panel
     {
         private readonly MainForm _main;
-        private int _selectedLoader = 0;   // 0 Fabric 1 Quilt 2 Forge
+        private int _selectedLoader = 0;   // 0 Fabric 1 Quilt 2 Forge 3 NeoForge
         private W11Card[] _loaderCards;
         private Panel _detailPanel;
-        private ComboBox _gameVer, _loaderVer;
+        private ComboBox _gameVer;
+        private LoaderVersionList _verList;
         private List<string> _loaderVersions;
 
         private static readonly (string Name, string Glyph, string Desc)[] LoaderInfo =
         {
-            ("Fabric", "\uE90F", "轻量、更新快、新版本秒适配。模组生态主流首选，大多数新模组都优先支持。"),
-            ("Quilt",  "\uEA86", "Fabric 的社区分支，完全兼容 Fabric 模组，还带自己的独占功能。"),
-            ("Forge",  "\uE943", "老牌大哥，历史模组几乎都在这。安装走官方安装器，第一次较慢。"),
+            ("Fabric",   "\uE90F", "轻量、更新快、新版本秒适配。模组生态主流首选，大多数新模组都优先支持。"),
+            ("Quilt",    "\uEA86", "Fabric 的社区分支，完全兼容 Fabric 模组，还带自己的独占功能。"),
+            ("Forge",    "\uE943", "老牌大哥，历史模组几乎都在这。安装走官方安装器，第一次较慢。"),
+            ("NeoForge", "\uE720", "Forge 的新锐分支，1.20.1+ 专属，模组生态增长最快的新家。"),
         };
 
         public LoadersPage(MainForm main)
@@ -38,40 +40,40 @@ namespace EasyerLauncher.Pages
             base.OnResize(eventargs);
             if (_loaderCards == null) return;
             int w = Math.Max(700, Width - 64);
-            int gap = 17;
-            int cw = (w - gap * 2) / 3;
-            for (int i = 0; i < 3; i++)
+            int gap = 12;
+            int cw = (w - gap * 3) / 4;
+            for (int i = 0; i < 4; i++)
                 _loaderCards[i].Bounds = new Rectangle(32 + i * (cw + gap), 90, cw, 170);
-            _detailPanel.Bounds = new Rectangle(32, 280, w, Math.Max(220, Height - 310));
+            _detailPanel.Bounds = new Rectangle(32, 280, w, Math.Max(240, Height - 310));
         }
 
         private void Build()
         {
             Controls.Add(PageUtil.Title("加载器"));
 
-            // ===== 三张加载器卡 =====
-            _loaderCards = new W11Card[3];
+            // ===== 四张加载器卡 =====
+            _loaderCards = new W11Card[4];
             int x = 32;
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 4; i++)
             {
                 int idx = i;
-                var card = new W11Card { Bounds = new Rectangle(x, 90, 314, 170), Tag = i };
+                var card = new W11Card { Bounds = new Rectangle(x, 90, 238, 170), Tag = i };
                 card.Controls.Add(new Label
                 {
                     Text = LoaderInfo[i].Glyph,
                     Font = Theme.BigIconFont,
                     ForeColor = Theme.Accent,
                     BackColor = Color.Transparent,
-                    Location = new Point(24, 18),
+                    Location = new Point(20, 16),
                     AutoSize = true
                 });
                 card.Controls.Add(new Label
                 {
                     Text = LoaderInfo[i].Name,
-                    Font = new Font(Theme.DefaultFontFamily, 14f, FontStyle.Bold),
+                    Font = new Font(Theme.DefaultFontFamily, 12.5f, FontStyle.Bold),
                     BackColor = Color.Transparent,
                     ForeColor = Theme.Foreground,
-                    Location = new Point(80, 24),
+                    Location = new Point(64, 22),
                     AutoSize = true
                 });
                 card.Controls.Add(new Label
@@ -80,13 +82,13 @@ namespace EasyerLauncher.Pages
                     Font = Theme.SmallFont,
                     BackColor = Color.Transparent,
                     ForeColor = Theme.ForegroundDim,
-                    Bounds = new Rectangle(24, 70, 268, 60)
+                    Bounds = new Rectangle(20, 64, 198, 64)
                 });
                 var chooseBtn = new W11Button
                 {
-                    Text = "选择 " + LoaderInfo[i].Name,
+                    Text = "选择",
                     ButtonKind = W11Button.Kind.Standard,
-                    Bounds = new Rectangle(24, 128, 160, 30),
+                    Bounds = new Rectangle(20, 128, 130, 30),
                     Font = Theme.SmallFont
                 };
                 chooseBtn.Click += (s, e) => { _selectedLoader = idx; UpdateLoaderSelection(); };
@@ -94,7 +96,7 @@ namespace EasyerLauncher.Pages
 
                 _loaderCards[i] = card;
                 Controls.Add(card);
-                x += 331;
+                x += 250;
             }
 
             // ===== 安装面板 =====
@@ -113,7 +115,7 @@ namespace EasyerLauncher.Pages
                 Location = new Point(28, y),
                 AutoSize = true
             });
-            y += 28;
+            y += 30;
             _gameVer = new ComboBox
             {
                 Bounds = new Rectangle(28, y, 420, 36),
@@ -124,17 +126,17 @@ namespace EasyerLauncher.Pages
                 _gameVer.Items.Add(v);
             if (_gameVer.Items.Count > 0) _gameVer.SelectedIndex = 0;
             detailCard.Controls.Add(_gameVer);
-            y += 56;
+            y += 52;
 
             detailCard.Controls.Add(new Label
             {
-                Text = "② 获取加载器版本列表",
+                Text = "② 获取加载器版本列表（点下方按钮，版本会列在右侧）",
                 ForeColor = Theme.ForegroundDim,
                 BackColor = Color.Transparent,
                 Location = new Point(28, y),
                 AutoSize = true
             });
-            y += 28;
+            y += 30;
 
             var fetchBtn = new W11Button
             {
@@ -145,14 +147,13 @@ namespace EasyerLauncher.Pages
             fetchBtn.Click += (s, e) => _ = FetchLoaderVersions();
             detailCard.Controls.Add(fetchBtn);
 
-            _loaderVer = new ComboBox
+            // 版本列表（PCL 式：可滚动列表行，单击选中）
+            _verList = new LoaderVersionList
             {
-                Bounds = new Rectangle(214, y, 420, 36),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                FlatStyle = FlatStyle.Flat
+                Bounds = new Rectangle(214, y - 4, 440, 130)
             };
-            detailCard.Controls.Add(_loaderVer);
-            y += 56;
+            detailCard.Controls.Add(_verList);
+            y += 78;
 
             var installBtn = new W11Button
             {
@@ -167,7 +168,7 @@ namespace EasyerLauncher.Pages
 
             detailCard.Controls.Add(new Label
             {
-                Text = "提示：Fabric / Quilt 由启动器直接安装，全自动；Forge 会下载官方安装器并用本机 Java 执行。",
+                Text = "提示：Fabric / Quilt 由启动器直接安装，全自动；Forge / NeoForge 会下载官方安装器并用本机 Java 执行，第一次较慢。",
                 Font = Theme.SmallFont,
                 ForeColor = Theme.ForegroundDim,
                 BackColor = Color.Transparent,
@@ -178,15 +179,15 @@ namespace EasyerLauncher.Pages
 
         private void UpdateLoaderSelection()
         {
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 4; i++)
             {
                 bool sel = i == _selectedLoader;
                 _loaderCards[i].Invalidate();
-                // 选中卡片：把按钮换成强调色
                 foreach (Control c in _loaderCards[i].Controls)
-                    if (c is W11Button b && b.Text.StartsWith("选择"))
+                    if (c is W11Button b && b.Text == "选择")
                         b.ButtonKind = sel ? W11Button.Kind.Accent : W11Button.Kind.Standard;
             }
+            _verList?.ClearItems();
         }
 
         private async Task FetchLoaderVersions()
@@ -207,13 +208,15 @@ namespace EasyerLauncher.Pages
                     {
                         0 => FabricInstaller.GetLoaderVersions(FabricInstaller.LoaderKind.Fabric, game),
                         1 => FabricInstaller.GetLoaderVersions(FabricInstaller.LoaderKind.Quilt, game),
-                        _ => ForgeInstaller.GetVersions(game).Select(f => f.Build).ToList()
+                        2 => ForgeInstaller.GetVersions(game).Select(f => f.Build).ToList(),
+                        _ => NeoForgeInstaller.GetVersions(game)
                     };
                 });
-                _loaderVer.Items.Clear();
-                foreach (var v in _loaderVersions) _loaderVer.Items.Add(v);
-                if (_loaderVer.Items.Count > 0) _loaderVer.SelectedIndex = 0;
-                _main.SetStatus("加载器版本已获取，共 " + _loaderVersions.Count + " 个");
+                _verList.SetItems(_loaderVersions, _selectedLoader);
+                if (_loaderVersions.Count > 0)
+                    _main.SetStatus("加载器版本已获取，共 " + _loaderVersions.Count + " 个");
+                else
+                    _main.SetStatus("该游戏版本没有可用的 " + LoaderInfo[_selectedLoader].Name + " 版本");
             }
             catch (Exception ex)
             {
@@ -223,31 +226,38 @@ namespace EasyerLauncher.Pages
 
         private void Install()
         {
-            if (_gameVer.SelectedItem == null || _loaderVer.SelectedItem == null)
+            var loader = _verList.SelectedItem;
+            if (_gameVer.SelectedItem == null || loader == null)
             {
-                MessageBox.Show("游戏版本和加载器版本都得选！", "Easyer");
+                MessageBox.Show("游戏版本和加载器版本都得选！（版本列表在右边，先点「获取版本列表」）", "Easyer");
                 return;
             }
             var game = _gameVer.SelectedItem.ToString();
-            var loader = _loaderVer.SelectedItem.ToString();
+            var name = LoaderInfo[_selectedLoader].Name;
 
-            _main.SetStatus("开始安装加载器 ...");
+            _main.SetStatus("开始安装 " + name + " ...");
             Task.Run(() =>
             {
                 try
                 {
-                    if (_selectedLoader == 2)
+                    switch (_selectedLoader)
                     {
-                        ForgeInstaller.Install(game, loader, _main.Cfg.GameDirectory, _main.Cfg.JavaPath,
-                            msg => _main.SetStatus("[Forge] " + msg));
+                        case 2:
+                            ForgeInstaller.Install(game, loader, _main.Cfg.GameDirectory, _main.Cfg.JavaPath,
+                                msg => _main.SetStatus("[Forge] " + msg));
+                            break;
+                        case 3:
+                            NeoForgeInstaller.Install(game, loader, _main.Cfg.GameDirectory, _main.Cfg.JavaPath,
+                                msg => _main.SetStatus("[NeoForge] " + msg));
+                            break;
+                        default:
+                            var kind = _selectedLoader == 0 ? FabricInstaller.LoaderKind.Fabric : FabricInstaller.LoaderKind.Quilt;
+                            FabricInstaller.Install(kind, game, loader, _main.Cfg.GameDirectory,
+                                msg => _main.SetStatus("[加载器] " + msg));
+                            break;
                     }
-                    else
-                    {
-                        var kind = _selectedLoader == 0 ? FabricInstaller.LoaderKind.Fabric : FabricInstaller.LoaderKind.Quilt;
-                        FabricInstaller.Install(kind, game, loader, _main.Cfg.GameDirectory,
-                            msg => _main.SetStatus("[加载器] " + msg));
-                    }
-                    _main.SetStatus("加载器安装完成 ✓");
+                    _main.SetStatus(name + " 安装完成 ✓");
+                    _main.RefreshHomeVersions();
                     MessageBox.Show("安装完成！主页版本列表里会出现对应版本。", "Easyer",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
@@ -257,6 +267,94 @@ namespace EasyerLauncher.Pages
                     MessageBox.Show("安装失败：\n" + ex.Message, "Easyer", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             });
+        }
+    }
+
+    /// <summary>PCL 式加载器版本列表（自绘行，单击选中，带强调色高亮）。</summary>
+    internal class LoaderVersionList : Control
+    {
+        private List<string> _items = new();
+        private int _selectedIndex = -1;
+        private int _loaderIdx = 0;
+        private int _scroll;
+        private const int RowH = 30;
+
+        public event Action SelectionChanged;
+
+        public string SelectedItem =>
+            _selectedIndex >= 0 && _selectedIndex < _items.Count ? _items[_selectedIndex] : null;
+
+        public LoaderVersionList()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            BackColor = Theme.Input;
+        }
+
+        public void ClearItems()
+        {
+            _items = new List<string>();
+            _selectedIndex = -1;
+            _scroll = 0;
+            Invalidate();
+        }
+
+        public void SetItems(List<string> items, int loaderIdx)
+        {
+            _items = items ?? new List<string>();
+            _loaderIdx = loaderIdx;
+            _selectedIndex = _items.Count > 0 ? 0 : -1;
+            _scroll = 0;
+            Invalidate();
+            SelectionChanged?.Invoke();
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            _scroll = Math.Max(0, Math.Min(Math.Max(0, _items.Count * RowH - Height), _scroll - Math.Sign(e.Delta) * RowH * 3));
+            Invalidate();
+        }
+
+        protected override void OnMouseClick(MouseEventArgs e)
+        {
+            base.OnMouseClick(e);
+            int row = (e.Y + _scroll) / RowH;
+            if (row >= 0 && row < _items.Count)
+            {
+                _selectedIndex = row;
+                Invalidate();
+                SelectionChanged?.Invoke();
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.Clear(Theme.Input);
+            var name = _loaderIdx switch { 0 => "fabric-loader", 1 => "quilt-loader", 2 => "forge", _ => "neoforge" };
+
+            for (int i = _scroll / RowH; i * RowH - _scroll < Height && i < _items.Count; i++)
+            {
+                var rowRect = new Rectangle(6, i * RowH - _scroll + 2, Width - 22, RowH - 4);
+                bool sel = i == _selectedIndex;
+                using (var path = Theme.RoundedPath(rowRect, 8))
+                {
+                    using (var b = new SolidBrush(sel ? Color.FromArgb(60, Theme.Accent) : Color.Transparent))
+                        g.FillPath(b, path);
+                    if (sel) using (var pen = new Pen(Theme.Accent)) g.DrawPath(pen, path);
+                }
+                TextRenderer.DrawText(g, name + "  " + _items[i],
+                    sel ? new Font(Theme.DefaultFontFamily, 9.5f, FontStyle.Bold) : Theme.BodyFont,
+                    new Rectangle(rowRect.X + 12, rowRect.Y, rowRect.Width - 12, rowRect.Height),
+                    sel ? Theme.Accent : Theme.Foreground,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            }
+
+            if (_items.Count == 0)
+                TextRenderer.DrawText(g, "（点「获取版本列表」加载）", Theme.SmallFont,
+                    new Rectangle(0, 0, Width, Height), Theme.ForegroundDim,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
     }
 }

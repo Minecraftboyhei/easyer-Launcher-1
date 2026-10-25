@@ -174,6 +174,13 @@ namespace EasyerLauncher
                 StatusLabel.Text = msg;
         }
 
+        /// <summary>加载器装好后刷新主页版本列表（丢弃缓存的主页，下次导航重建）。</summary>
+        public void RefreshHomeVersions()
+        {
+            Pages.Remove("home");
+            if (CurrentPage == "home") Navigate("home");
+        }
+
         public void Navigate(string key)
         {
             CurrentPage = key;
