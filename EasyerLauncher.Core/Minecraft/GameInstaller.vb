@@ -45,7 +45,7 @@ Namespace Minecraft
                 Dim entry = VersionManifest.FindVersion(versionId)
                 If entry Is Nothing Then Throw New Exception("找不到版本: " & versionId)
                 Directory.CreateDirectory(Path.Combine(versionsDir, versionId))
-                Http.DownloadFile(entry.Url, jsonPath)
+                Http.DownloadFileAuto(entry.Url, jsonPath)
             End If
             Dim doc = JsonDocument.Parse(File.ReadAllText(jsonPath))
             Dim rv = ResolveFrom(doc.RootElement, versionsDir, versionId)
@@ -278,7 +278,7 @@ Namespace Minecraft
             ' 1) 客户端 jar（继承链最顶层提供）
             If Not String.IsNullOrEmpty(rv.ClientJarUrl) AndAlso Not File.Exists(rv.ClientJarPath) Then
                 report("下载客户端 jar ...")
-                Http.DownloadFile(rv.ClientJarUrl, rv.ClientJarPath, If(rv.ClientJarSha1 = "", Nothing, rv.ClientJarSha1))
+                Http.DownloadFileAuto(rv.ClientJarUrl, rv.ClientJarPath, If(rv.ClientJarSha1 = "", Nothing, rv.ClientJarSha1))
             End If
 
             ' 2) 库文件
@@ -294,7 +294,7 @@ Namespace Minecraft
                 End If
                 If need Then
                     report(String.Format("下载库 ({0}/{1}): {2}", i, total, libEntry.Name))
-                    Http.DownloadFile(libEntry.Url & libEntry.Path, dest, If(libEntry.Sha1 = "", Nothing, libEntry.Sha1))
+                    Http.DownloadFileAuto(libEntry.Url & libEntry.Path, dest, If(libEntry.Sha1 = "", Nothing, libEntry.Sha1))
                 End If
             Next
 
@@ -315,7 +315,7 @@ Namespace Minecraft
                 Dim idxPath = Path.Combine(idxDir, rv.AssetIndexId & ".json")
                 If Not File.Exists(idxPath) Then
                     report("下载资源索引 ...")
-                    Http.DownloadFile(rv.AssetIndexUrl, idxPath)
+                    Http.DownloadFileAuto(rv.AssetIndexUrl, idxPath)
                 End If
                 report("检查资源文件 ...")
                 DownloadAssets(idxPath, gameDir, report)
@@ -326,7 +326,7 @@ Namespace Minecraft
                 Dim logPath = Path.Combine(gameDir, rv.LoggingFilePath.Replace("/"c, Path.DirectorySeparatorChar))
                 If Not File.Exists(logPath) Then
                     report("下载日志配置 ...")
-                    Http.DownloadFile(rv.LoggingFileUrl, logPath)
+                    Http.DownloadFileAuto(rv.LoggingFileUrl, logPath)
                 End If
             End If
 
@@ -353,7 +353,7 @@ Namespace Minecraft
                 Sub(item)
                     Dim url = "https://resources.download.minecraft.net/" & item.Key.Substring(0, 2) & "/" & item.Key
                     Try
-                        Http.DownloadFile(url, item.Value)
+                        Http.DownloadFileAuto(url, item.Value)
                     Catch
                     End Try
                     SyncLock lockObj

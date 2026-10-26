@@ -27,10 +27,10 @@ Namespace Minecraft
             End Property
         End Class
 
-        ''' <summary>获取全部版本。</summary>
+        ''' <summary>获取全部版本（国内镜像优先，官方兜底）。</summary>
         Public Shared Function GetVersions() As List(Of VersionEntry)
             Dim list As New List(Of VersionEntry)
-            Using doc = Http.GetJson(ManifestUrl)
+            Using doc = System.Text.Json.JsonDocument.Parse(Http.GetStringAuto(ManifestUrl))
                 For Each v In doc.RootElement.GetProperty("versions").EnumerateArray()
                     list.Add(New VersionEntry With {
                         .Id = v.GetProperty("id").GetString(),
@@ -53,7 +53,7 @@ Namespace Minecraft
 
         ''' <summary>获取最新正式版 id。</summary>
         Public Shared Function LatestRelease() As String
-            Using doc = Http.GetJson(ManifestUrl)
+            Using doc = System.Text.Json.JsonDocument.Parse(Http.GetStringAuto(ManifestUrl))
                 Return doc.RootElement.GetProperty("latest").GetProperty("release").GetString()
             End Using
         End Function

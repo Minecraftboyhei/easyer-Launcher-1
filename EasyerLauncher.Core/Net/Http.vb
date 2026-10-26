@@ -83,6 +83,67 @@ Namespace Net
             End Using
         End Function
 
+        ''' <summary>BMCLAPI 国内镜像根（bangbang93 社区维护）。</summary>
+        Public Const BmclapiBase As String = "https://bmclapi2.bangbang93.com/"
+
+        ''' <summary>把官方资源 URL 转成 BMCLAPI 镜像 URL；无法镜像的返回 Nothing。</summary>
+        Public Shared Function ToMirror(url As String) As String
+            If String.IsNullOrEmpty(url) Then Return Nothing
+            Dim hostPrefixes() As String = {
+                "https://piston-meta.mojang.com/", "https://piston-data.mojang.com/",
+                "https://launcher.mojang.com/", "https://launchermeta.mojang.com/"}
+            For Each p In hostPrefixes
+                If url.StartsWith(p, StringComparison.Ordinal) Then
+                    Return BmclapiBase & url.Substring(p.Length)
+                End If
+            Next
+            Const resPrefix = "https://resources.download.minecraft.net/"
+            If url.StartsWith(resPrefix, StringComparison.Ordinal) Then
+                Return BmclapiBase & "assets/" & url.Substring(resPrefix.Length)
+            End If
+            Const libPrefix = "https://libraries.minecraft.net/"
+            If url.StartsWith(libPrefix, StringComparison.Ordinal) Then
+                Return BmclapiBase & "maven/" & url.Substring(libPrefix.Length)
+            End If
+            Return Nothing
+        End Function
+
+        ''' <summary>GET 文本：国内镜像优先，失败回退官方。</summary>
+        Public Shared Function GetStringAuto(url As String, Optional timeoutSec As Integer = 20) As String
+            Dim mirror = ToMirror(url)
+            If mirror Is Nothing Then Return GetString(url, timeoutSec)
+            Try
+                Return GetString(mirror, timeoutSec)
+            Catch
+                Return GetString(url, timeoutSec)
+            End Try
+        End Function
+
+        ''' <summary>下载文件：国内镜像优先，失败回退官方，双源都炸才报错。</summary>
+        Public Shared Sub DownloadFileAuto(url As String, destPath As String,
+                                           Optional expectedSha1 As String = Nothing,
+                                           Optional progress As Action(Of Long, Long) = Nothing)
+            Dim mirror = ToMirror(url)
+            If mirror Is Nothing Then
+                DownloadFile(url, destPath, expectedSha1, progress)
+                Return
+            End If
+            Dim mirrorEx As Exception = Nothing
+            Try
+                DownloadFile(mirror, destPath, expectedSha1, progress)
+                Return
+            Catch ex As Exception
+                mirrorEx = ex
+            End Try
+            Try
+                DownloadFile(url, destPath, expectedSha1, progress)
+            Catch officialEx As Exception
+                Throw New Exception("镜像与官方源均下载失败：" & url & Environment.NewLine &
+                                    "  镜像: " & mirrorEx.Message & Environment.NewLine &
+                                    "  官方: " & officialEx.Message)
+            End Try
+        End Sub
+
         ''' <summary>下载文件到指定路径，带 SHA1 校验与进度回调。</summary>
         Public Shared Sub DownloadFile(url As String, destPath As String,
                                        Optional expectedSha1 As String = Nothing,
@@ -98,7 +159,9 @@ Namespace Net
 
             Dim tmpPath = destPath & ".download"
             Using resp = Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).GetAwaiter().GetResult()
-                resp.EnsureSuccessStatusCode()
+                If Not resp.IsSuccessStatusCode Then
+                    Throw New Exception("HTTP " & CInt(resp.StatusCode) & " — " & url)
+                End If
                 Dim total As Long = If(resp.Content.Headers.ContentLength.HasValue, resp.Content.Headers.ContentLength.Value, -1L)
                 Using fs = System.IO.File.Create(tmpPath)
                     Using stream = resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
