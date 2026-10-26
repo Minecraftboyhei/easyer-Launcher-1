@@ -54,9 +54,9 @@ namespace EasyerLauncher.Pages
         private void LayoutCards()
         {
             if (_leftCard == null || _rightCard == null) return;
-            int total = Math.Max(760, Width - 64);
-            int leftW = (int)(total * 0.52);
-            int rightW = total - leftW - 20;
+            int total = Math.Max(900, Width - 64);
+            int rightW = 480;                                   // 右卡固定宽度，保证说明文字不裁边
+            int leftW = Math.Max(340, total - rightW - 20);     // 左卡吃剩余空间
             _leftCard.Bounds = new Rectangle(32, 90, leftW, 360);
             _rightCard.Bounds = new Rectangle(32 + leftW + 20, 90, rightW, 430);
             _list.Bounds = new Rectangle(16, 16, leftW - 32, 220);
@@ -173,8 +173,10 @@ namespace EasyerLauncher.Pages
             _rightCard.Controls.Add(new Label
             {
                 Text = "点「去注册」→ 新注册（免费），账户类型选\n" +
-                       "「仅个人 Microsoft 账户」，复制「应用程序(客户端) ID」\n" +
-                       "再到「身份验证」把「允许公共客户端流」设为「是」。",
+                       "「仅个人 Microsoft 账户」，复制应用程序 ID。\n" +
+                       "若提示「创建应用程序的功能已被禁用」：\n" +
+                       "右上角头像 → 切换目录 → Default Directory；\n" +
+                       "或先加入 M365 开发人员计划（免费）再注册。",
                 Font = Theme.SmallFont,
                 ForeColor = Theme.ForegroundDim,
                 BackColor = Color.Transparent,
@@ -183,7 +185,7 @@ namespace EasyerLauncher.Pages
             });
             _clientId = new TextBox
             {
-                Bounds = new Rectangle(20, 292, 300, 30),
+                Bounds = new Rectangle(20, 322, 300, 30),
                 BorderStyle = BorderStyle.FixedSingle,
                 Text = _main.Cfg.MsClientId,
                 PlaceholderText = "Azure 应用 Client ID（GUID）"
