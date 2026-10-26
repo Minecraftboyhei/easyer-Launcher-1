@@ -21,6 +21,8 @@ Namespace Minecraft
             Public Property WindowHeight As Integer = 720
             Public Property FullScreen As Boolean = False
             Public Property ServerAddress As String = ""    ' 可选：直接进服务器
+            Public Property AuthlibInjectorUrl As String = ""   ' 外置登录：Yggdrasil 根地址
+            Public Property AuthlibInjectorJar As String = ""   ' 外置登录：agent jar 路径
         End Class
 
         ''' <summary>构建 java 命令行参数（不含 java 可执行文件本身）。</summary>
@@ -70,6 +72,11 @@ Namespace Minecraft
             args.Add("-XX:+UseG1GC")
             args.Add("-XX:+UnlockExperimentalVMOptions")
             args.Add("-Dfile.encoding=UTF-8")
+
+            ' 外置登录：挂 authlib-injector agent（必须在 -cp 之前）
+            If Not String.IsNullOrEmpty(opt.AuthlibInjectorUrl) Then
+                args.Add("-javaagent:""" & opt.AuthlibInjectorJar & "=" & opt.AuthlibInjectorUrl & """")
+            End If
 
             If rv.JvmArgs.Count > 0 Then
                 For Each token In rv.JvmArgs

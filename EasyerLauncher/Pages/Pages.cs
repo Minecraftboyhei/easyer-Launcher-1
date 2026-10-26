@@ -34,6 +34,7 @@ namespace EasyerLauncher.Pages
         private ListBox _list;
         private TextBox _offlineName;
         private TextBox _clientId;
+        private TextBox _extUser, _extPass;
         private bool _deviceCodeWaiting = false;
         private W11Card _leftCard, _rightCard;
 
@@ -41,6 +42,7 @@ namespace EasyerLauncher.Pages
         {
             _main = main;
             Dock = DockStyle.Fill;
+            AutoScroll = true;
             Build();
         }
 
@@ -58,7 +60,7 @@ namespace EasyerLauncher.Pages
             int rightW = 480;                                   // 右卡固定宽度，保证说明文字不裁边
             int leftW = Math.Max(340, total - rightW - 20);     // 左卡吃剩余空间
             _leftCard.Bounds = new Rectangle(32, 90, leftW, 360);
-            _rightCard.Bounds = new Rectangle(32 + leftW + 20, 90, rightW, 430);
+            _rightCard.Bounds = new Rectangle(32 + leftW + 20, 90, rightW, 640);
             _list.Bounds = new Rectangle(16, 16, leftW - 32, 220);
         }
 
@@ -209,6 +211,83 @@ namespace EasyerLauncher.Pages
             msBtn.Click += (s, e) => _ = MicrosoftLogin();
             _rightCard.Controls.Add(msBtn);
 
+            // 外置登录（LittleSkin，免微软免 Azure）
+            _rightCard.Controls.Add(new Label
+            {
+                Text = "外置登录 · LittleSkin（免微软免 Azure）",
+                Font = Theme.H2Font,
+                BackColor = Color.Transparent,
+                Location = new Point(20, 420),
+                AutoSize = true
+            });
+            _rightCard.Controls.Add(new Label
+            {
+                Text = "没有正版也能玩：去 littleskin.cn 免费注册个账号（只要邮箱），\n" +
+                       "在这里填用户名和密码登录，皮肤用 LittleSkin 的。",
+                Font = Theme.SmallFont,
+                ForeColor = Theme.ForegroundDim,
+                BackColor = Color.Transparent,
+                Location = new Point(20, 452),
+                AutoSize = true
+            });
+            _extUser = new TextBox
+            {
+                Bounds = new Rectangle(20, 508, 300, 30),
+                BorderStyle = BorderStyle.FixedSingle,
+                PlaceholderText = "用户名或邮箱"
+            };
+            _rightCard.Controls.Add(_extUser);
+            _extPass = new TextBox
+            {
+                Bounds = new Rectangle(20, 544, 300, 30),
+                BorderStyle = BorderStyle.FixedSingle,
+                PlaceholderText = "密码",
+                UseSystemPasswordChar = true
+            };
+            _rightCard.Controls.Add(_extPass);
+            var extBtn = new W11Button
+            {
+                Text = "登录 LittleSkin",
+                ButtonKind = W11Button.Kind.Accent,
+                Bounds = new Rectangle(330, 544, 120, 30)
+            };
+            extBtn.Click += async (s, e) =>
+            {
+                var u = _extUser.Text.Trim();
+                var p = _extPass.Text;
+                if (u.Length == 0 || p.Length == 0)
+                {
+                    MessageBox.Show("用户名和密码都要填！", "Easyer");
+                    return;
+                }
+                try
+                {
+                    var prof = await System.Threading.Tasks.Task.Run(
+                        () => Core.Auth.ExternalAuth.Login(u, p));
+                    _main.Cfg.Accounts.RemoveAll(a => a.Name == prof.Name);
+                    _main.Cfg.Accounts.Add(new Core.Config.AccountInfo
+                    {
+                        Name = prof.Name,
+                        Uuid = prof.Uuid,
+                        AccessToken = prof.AccessToken,
+                        AccountType = "littleskin",
+                        AuthServer = "LittleSkin"
+                    });
+                    if (string.IsNullOrEmpty(_main.Cfg.ActiveAccountName))
+                        _main.Cfg.ActiveAccountName = prof.Name;
+                    _main.Cfg.Save();
+                    RefreshList();
+                    _main.SetStatus("外置账号 " + prof.Name + " 登录成功 ✓");
+                    _extPass.Clear();
+                }
+                catch (Exception ex)
+                {
+                    _main.SetStatus("外置登录失败：" + ex.Message);
+                    MessageBox.Show(ex.Message, "Easyer", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
+            _rightCard.Controls.Add(extBtn);
+
             LayoutCards();
             RefreshList();
         }
@@ -218,7 +297,7 @@ namespace EasyerLauncher.Pages
             _list.Items.Clear();
             foreach (var a in _main.Cfg.Accounts)
                 _list.Items.Add(a.Name + (a.Name == _main.Cfg.ActiveAccountName ? "   ← 当前" : "") +
-                                (a.AccountType == "microsoft" ? "   [正版]" : "   [离线]"));
+                                (a.AccountType == "microsoft" ? "   [正版]" : a.AccountType == "littleskin" ? "   [外置]" : "   [离线]"));
         }
 
         private async Task MicrosoftLogin()

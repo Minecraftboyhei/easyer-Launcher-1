@@ -67,6 +67,7 @@ Namespace Config
         Public Property AccountType As String = "offline"  ' offline / microsoft
         Public Property MsRefreshToken As String = ""   ' 正版刷新令牌
         Public Property MsExpiresAt As String = ""      ' token 过期时间（本地）
+        Public Property AuthServer As String = ""       ' 外置登录的认证服务器名（littleskin 等）
     End Class
 
 End Namespace

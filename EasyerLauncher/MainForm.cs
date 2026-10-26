@@ -303,6 +303,16 @@ namespace EasyerLauncher
                     }
                 }
 
+                // 外置登录账号：确保 authlib-injector 就位
+                string injectorUrl = null, injectorJar = null;
+                if (acc.AccountType == "littleskin")
+                {
+                    SetStatus("准备外置登录组件 ...");
+                    injectorUrl = Core.Auth.ExternalAuth.AuthRoot;
+                    injectorJar = await System.Threading.Tasks.Task.Run(
+                        () => Core.Auth.ExternalAuth.EnsureInjectorJar(Cfg.GameDirectory));
+                }
+
                 await System.Threading.Tasks.Task.Run(() =>
                 {
                     var opt = new Core.Minecraft.GameLauncher.LaunchOptions
@@ -319,7 +329,9 @@ namespace EasyerLauncher
                         },
                         WindowWidth = Cfg.WindowWidth,
                         WindowHeight = Cfg.WindowHeight,
-                        FullScreen = Cfg.FullScreen
+                        FullScreen = Cfg.FullScreen,
+                        AuthlibInjectorUrl = injectorUrl,
+                        AuthlibInjectorJar = injectorJar
                     };
                     Core.Minecraft.GameLauncher.Launch(opt);
                 });
