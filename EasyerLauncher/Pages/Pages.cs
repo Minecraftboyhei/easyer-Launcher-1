@@ -174,11 +174,9 @@ namespace EasyerLauncher.Pages
             });
             _rightCard.Controls.Add(new Label
             {
-                Text = "拿 Client ID：先试 apps.dev.microsoft.com（个人\n" +
-                       "账号直接登，不用 Azure）→ 创建应用程序 → 平台\n" +
-                       "选 Web，重定向 URI 填 http://localhost/signin，\n" +
-                       "复制应用程序 ID 填这里。不行再用「去注册」，\n" +
-                       "报禁用就右上角切换目录到 Default Directory。",
+                Text = "已内置登录应用，开箱即用：点「浏览器登录」→ 浏览器里登\n" +
+                       "录你的微软账号 → 回到启动器就完成。Client ID 一般不用动，\n" +
+                       "只有你自己的应用出问题时才需要换。",
                 Font = Theme.SmallFont,
                 ForeColor = Theme.ForegroundDim,
                 BackColor = Color.Transparent,
@@ -216,7 +214,7 @@ namespace EasyerLauncher.Pages
                 if (!Guid.TryParse(clientId, out _))
                 {
                     MessageBox.Show("先填一个有效的 Client ID（GUID）！\n" +
-                        "首选 apps.dev.microsoft.com 免费创建，见上方说明。", "Easyer");
+                        "通常已经自动填好了，不要清空它。", "Easyer");
                     return;
                 }
                 _main.Cfg.MsClientId = clientId;

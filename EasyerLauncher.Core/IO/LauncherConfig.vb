@@ -37,11 +37,18 @@ Namespace Config
             Try
                 Dim p = DefaultPath()
                 If File.Exists(p) Then
-                    Return JsonSerializer.Deserialize(Of LauncherConfig)(File.ReadAllText(p))
+                    Dim cfg = JsonSerializer.Deserialize(Of LauncherConfig)(File.ReadAllText(p))
+                    If cfg IsNot Nothing AndAlso String.IsNullOrWhiteSpace(cfg.MsClientId) Then
+                        ' 老配置里没存 ClientId → 用内置的默认值，开箱即可正版登录
+                        cfg.MsClientId = EasyerLauncher.Core.Auth.MicrosoftAuth.DefaultClientId
+                    End If
+                    If cfg IsNot Nothing Then Return cfg
                 End If
             Catch
             End Try
-            Return New LauncherConfig()
+            Dim fresh As New LauncherConfig()
+            fresh.MsClientId = EasyerLauncher.Core.Auth.MicrosoftAuth.DefaultClientId
+            Return fresh
         End Function
 
         Public Sub Save()

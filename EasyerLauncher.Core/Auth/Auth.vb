@@ -37,6 +37,12 @@ Namespace Auth
     ''' <summary>Microsoft 正版登录：设备码流程 → XBL → XSTS → Minecraft Services。</summary>
     Public Class MicrosoftAuth
 
+        ''' <summary>
+        ''' 本项目自带的 Azure 应用 Client ID。公共客户端 ID 不是机密，可以随程序公开分发。
+        ''' 该应用已配置为「任何组织目录中的账户和个人 Microsoft 账户」+ 公共客户端流 + http://localhost/signin。
+        ''' </summary>
+        Public Const DefaultClientId As String = "ee60d27a-fb39-4e43-a2c5-6d04f5e4a5b4"
+
         Private Const Tenant As String = "consumers"
         Private Const Scope As String = "XboxLive.signin offline_access"
         Private Const TokenUrl As String = "https://login.microsoftonline.com/" & Tenant & "/oauth2/v2.0/token"
