@@ -117,6 +117,41 @@ Namespace Auth
             End Using
         End Function
 
+        ''' <summary>生成浏览器授权地址（授权码模式 + localhost 回调，端口由 MS 回环规则忽略）。</summary>
+        Public Shared Function BuildAuthorizeUrl(clientId As String, port As Integer) As String
+            Return "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize" &
+                   "?client_id=" & Uri.EscapeDataString(clientId) &
+                   "&response_type=code" &
+                   "&redirect_uri=" & Uri.EscapeDataString("http://localhost:" & port & "/signin") &
+                   "&response_mode=query" &
+                   "&scope=" & Uri.EscapeDataString(Scope)
+        End Function
+
+        ''' <summary>用授权码换令牌 → XBL → MC 档案。</summary>
+        Public Shared Function FinishWithAuthCode(clientId As String, code As String, port As Integer) As McProfile
+            Dim form As New Dictionary(Of String, String) From {
+                {"client_id", clientId},
+                {"code", code},
+                {"redirect_uri", "http://localhost:" & port & "/signin"},
+                {"grant_type", "authorization_code"}
+            }
+            Dim resp = Http.PostForm(TokenUrl, form)
+            Using doc = JsonDocument.Parse(resp)
+                Dim r = doc.RootElement
+                Dim errEl As JsonElement
+                If r.TryGetProperty("error", errEl) Then
+                    Dim desc = ""
+                    Dim dEl As JsonElement
+                    If r.TryGetProperty("error_description", dEl) Then desc = dEl.GetString()
+                    Throw New Exception("微软登录错误: " & errEl.GetString() & If(desc <> "", " — " & desc, ""))
+                End If
+                Dim refresh As String = ""
+                Dim rfEl As JsonElement
+                If r.TryGetProperty("refresh_token", rfEl) Then refresh = rfEl.GetString()
+                Return XboxToMcProfile(r.GetProperty("access_token").GetString(), refresh)
+            End Using
+        End Function
+
         ''' <summary>用 MS access_token 完成 XBL→XSTS→MC 链路。</summary>
         Public Shared Function XboxToMcProfile(msAccessToken As String, refreshToken As String) As McProfile
             ' 1) XBL

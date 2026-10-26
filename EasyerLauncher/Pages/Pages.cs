@@ -174,11 +174,11 @@ namespace EasyerLauncher.Pages
             });
             _rightCard.Controls.Add(new Label
             {
-                Text = "点「去注册」→ 新注册（免费），账户类型选\n" +
-                       "「仅个人 Microsoft 账户」，复制应用程序 ID。\n" +
-                       "若提示「创建应用程序的功能已被禁用」：\n" +
-                       "右上角头像 → 切换目录 → Default Directory；\n" +
-                       "或先加入 M365 开发人员计划（免费）再注册。",
+                Text = "拿 Client ID：先试 apps.dev.microsoft.com（个人\n" +
+                       "账号直接登，不用 Azure）→ 创建应用程序 → 平台\n" +
+                       "选 Web，重定向 URI 填 http://localhost/signin，\n" +
+                       "复制应用程序 ID 填这里。不行再用「去注册」，\n" +
+                       "报禁用就右上角切换目录到 Default Directory。",
                 Font = Theme.SmallFont,
                 ForeColor = Theme.ForegroundDim,
                 BackColor = Color.Transparent,
@@ -207,8 +207,53 @@ namespace EasyerLauncher.Pages
             };
             _rightCard.Controls.Add(azureBtn);
 
-            var msBtn = new W11Button { Text = "设备码登录", ButtonKind = W11Button.Kind.Accent, Bounds = new Rectangle(20, 364, 190, 40) };
-            msBtn.Click += (s, e) => _ = MicrosoftLogin();
+            var msBtn = new W11Button { Text = "浏览器登录（推荐）", ButtonKind = W11Button.Kind.Accent, Bounds = new Rectangle(20, 364, 190, 40) };
+            var dcBtn = new W11Button { Text = "设备码登录", ButtonKind = W11Button.Kind.Ghost, Bounds = new Rectangle(220, 366, 130, 38) };
+            dcBtn.Click += (s, e) => _ = MicrosoftLogin();
+            msBtn.Click += async (s, e) =>
+            {
+                var clientId = _clientId.Text.Trim();
+                if (!Guid.TryParse(clientId, out _))
+                {
+                    MessageBox.Show("先填一个有效的 Client ID（GUID）！\n" +
+                        "首选 apps.dev.microsoft.com 免费创建，见上方说明。", "Easyer");
+                    return;
+                }
+                _main.Cfg.MsClientId = clientId;
+                _main.Cfg.Save();
+
+                if (_deviceCodeWaiting) return;
+                _deviceCodeWaiting = true;
+                try
+                {
+                    _main.SetStatus("已打开浏览器，等待微软授权 ...");
+                    var prof = await System.Threading.Tasks.Task.Run(
+                        () => Core.Auth.LoopbackLogin.Run(clientId, 300));
+
+                    _main.Cfg.Accounts.RemoveAll(a => a.Name == prof.Name);
+                    _main.Cfg.Accounts.Add(new Core.Config.AccountInfo
+                    {
+                        Name = prof.Name,
+                        Uuid = prof.Uuid,
+                        AccessToken = prof.AccessToken,
+                        MsRefreshToken = prof.RefreshToken,
+                        MsExpiresAt = DateTime.UtcNow.AddHours(23).ToString("o"),
+                        AccountType = "microsoft"
+                    });
+                    _main.Cfg.ActiveAccountName = prof.Name;
+                    _main.Cfg.Save();
+                    RefreshList();
+                    _main.SetStatus("正版账号 " + prof.Name + " 登录成功 ✓");
+                }
+                catch (Exception ex)
+                {
+                    _main.SetStatus("微软登录失败：" + ex.Message);
+                    MessageBox.Show("登录失败：\n" + ex.Message, "Easyer",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                finally { _deviceCodeWaiting = false; }
+            };
+            _rightCard.Controls.Add(dcBtn);
             _rightCard.Controls.Add(msBtn);
 
             // 外置登录（LittleSkin，免微软免 Azure）
