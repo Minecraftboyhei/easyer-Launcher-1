@@ -206,7 +206,7 @@ Namespace Minecraft
             If Not el.TryGetProperty("libraries", lsEl) Then Return libs
 
             For Each l In lsEl.EnumerateArray()
-                Dim t As JsonElement
+                Dim t As JsonElement, t2 As JsonElement
                 If l.TryGetProperty("rules", t) Then
                     If Not RuleAllows(t) Then Continue For
                 End If
@@ -222,7 +222,7 @@ Namespace Minecraft
                             .Path = artEl.GetProperty("path").GetString(),
                             .Sha1 = ""
                         }
-                        If artEl.TryGetProperty("sha1", t) Then le.Sha1 = t.GetString()
+                        If artEl.TryGetProperty("sha1", t2) Then le.Sha1 = t2.GetString()
                         libs.Add(le)
                     End If
                     If t.TryGetProperty("classifiers", clsEl) Then
@@ -235,7 +235,7 @@ Namespace Minecraft
                                 .Sha1 = "",
                                 .IsNative = True
                             }
-                            If nwEl.TryGetProperty("sha1", t) Then nl.Sha1 = t.GetString()
+                            If nwEl.TryGetProperty("sha1", t2) Then nl.Sha1 = t2.GetString()
                             libs.Add(nl)
                         End If
                     End If
