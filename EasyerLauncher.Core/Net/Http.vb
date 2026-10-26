@@ -119,24 +119,26 @@ Namespace Net
             End Try
         End Function
 
-        ''' <summary>下载文件：国内镜像优先，失败回退官方，双源都炸才报错。</summary>
+        ''' <summary>下载文件：国内镜像优先，失败回退官方，双源都炸才报错。
+        ''' timeoutSec > 0 时限制单次请求超时（小文件用，避免挂起拖死整批下载）。</summary>
         Public Shared Sub DownloadFileAuto(url As String, destPath As String,
                                            Optional expectedSha1 As String = Nothing,
-                                           Optional progress As Action(Of Long, Long) = Nothing)
+                                           Optional progress As Action(Of Long, Long) = Nothing,
+                                           Optional timeoutSec As Integer = 0)
             Dim mirror = ToMirror(url)
             If mirror Is Nothing Then
-                DownloadFile(url, destPath, expectedSha1, progress)
+                DownloadFile(url, destPath, expectedSha1, progress, timeoutSec)
                 Return
             End If
             Dim mirrorEx As Exception = Nothing
             Try
-                DownloadFile(mirror, destPath, expectedSha1, progress)
+                DownloadFile(mirror, destPath, expectedSha1, progress, timeoutSec)
                 Return
             Catch ex As Exception
                 mirrorEx = ex
             End Try
             Try
-                DownloadFile(url, destPath, expectedSha1, progress)
+                DownloadFile(url, destPath, expectedSha1, progress, timeoutSec)
             Catch officialEx As Exception
                 Throw New Exception("镜像与官方源均下载失败：" & url & Environment.NewLine &
                                     "  镜像: " & mirrorEx.Message & Environment.NewLine &
@@ -144,10 +146,11 @@ Namespace Net
             End Try
         End Sub
 
-        ''' <summary>下载文件到指定路径，带 SHA1 校验与进度回调。</summary>
+        ''' <summary>下载文件到指定路径，带 SHA1 校验与进度回调。timeoutSec > 0 覆盖默认 10 分钟超时。</summary>
         Public Shared Sub DownloadFile(url As String, destPath As String,
                                        Optional expectedSha1 As String = Nothing,
-                                       Optional progress As Action(Of Long, Long) = Nothing)
+                                       Optional progress As Action(Of Long, Long) = Nothing,
+                                       Optional timeoutSec As Integer = 0)
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(destPath))
 
             If expectedSha1 IsNot Nothing AndAlso System.IO.File.Exists(destPath) Then
@@ -158,25 +161,37 @@ Namespace Net
             End If
 
             Dim tmpPath = destPath & ".download"
-            Using resp = Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).GetAwaiter().GetResult()
-                If Not resp.IsSuccessStatusCode Then
-                    Throw New Exception("HTTP " & CInt(resp.StatusCode) & " — " & url)
-                End If
-                Dim total As Long = If(resp.Content.Headers.ContentLength.HasValue, resp.Content.Headers.ContentLength.Value, -1L)
-                Using fs = System.IO.File.Create(tmpPath)
-                    Using stream = resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
-                        Dim buffer(81919) As Byte
-                        Dim read As Integer
-                        Dim done As Long = 0
-                        read = stream.Read(buffer, 0, buffer.Length)
-                        While read > 0
-                            fs.Write(buffer, 0, read)
-                            done += read
-                            If progress IsNot Nothing AndAlso total > 0 Then progress(done, total)
-                            read = stream.Read(buffer, 0, buffer.Length)
-                        End While
+            Using cts As CancellationTokenSource = If(timeoutSec > 0, New CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec)), Nothing)
+                Try
+                    Using resp = Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead,
+                                                 If(cts Is Nothing, CancellationToken.None, cts.Token)).GetAwaiter().GetResult()
+                        If Not resp.IsSuccessStatusCode Then
+                            Throw New Exception("HTTP " & CInt(resp.StatusCode) & " — " & url)
+                        End If
+                        Dim total As Long = If(resp.Content.Headers.ContentLength.HasValue, resp.Content.Headers.ContentLength.Value, -1L)
+                        Using fs = System.IO.File.Create(tmpPath)
+                            Using stream = resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+                                Dim buffer(81919) As Byte
+                                Dim read As Integer
+                                Dim done As Long = 0
+                                read = stream.Read(buffer, 0, buffer.Length)
+                                While read > 0
+                                    fs.Write(buffer, 0, read)
+                                    done += read
+                                    If progress IsNot Nothing AndAlso total > 0 Then progress(done, total)
+                                    read = stream.Read(buffer, 0, buffer.Length)
+                                End While
+                            End Using
+                        End Using
                     End Using
-                End Using
+                Catch
+                    ' 失败/超时/挂起都清掉半截文件，别留脏数据
+                    Try
+                        If System.IO.File.Exists(tmpPath) Then System.IO.File.Delete(tmpPath)
+                    Catch
+                    End Try
+                    Throw
+                End Try
             End Using
 
             If expectedSha1 IsNot Nothing AndAlso Not VerifySha1(tmpPath, expectedSha1) Then

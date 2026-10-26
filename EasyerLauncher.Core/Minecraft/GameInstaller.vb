@@ -29,10 +29,19 @@ Namespace Minecraft
 
     Public Class LibraryEntry
         Public Property Name As String
-        Public Property Url As String          ' 下载根
+        Public Property Url As String          ' 下载根（libraries.minecraft.net/），也可能是完整文件 URL
         Public Property Path As String         ' 相对路径
         Public Property Sha1 As String = ""
         Public Property IsNative As Boolean = False
+
+        ''' <summary>实际下载地址：Url 已是完整文件地址就直接用，否则拼上相对路径。</summary>
+        Public ReadOnly Property DownloadUrl As String
+            Get
+                If String.IsNullOrEmpty(Url) Then Return Path
+                If Url.EndsWith(Path, StringComparison.OrdinalIgnoreCase) Then Return Url
+                Return Url & Path
+            End Get
+        End Property
     End Class
 
     ''' <summary>版本 JSON 读取与继承链解析。</summary>
@@ -294,7 +303,7 @@ Namespace Minecraft
                 End If
                 If need Then
                     report(String.Format("下载库 ({0}/{1}): {2}", i, total, libEntry.Name))
-                    Http.DownloadFileAuto(libEntry.Url & libEntry.Path, dest, If(libEntry.Sha1 = "", Nothing, libEntry.Sha1))
+                    Http.DownloadFileAuto(libEntry.DownloadUrl, dest, If(libEntry.Sha1 = "", Nothing, libEntry.Sha1))
                 End If
             Next
 
@@ -349,12 +358,17 @@ Namespace Minecraft
             If missing.Count = 0 Then Return
             Dim done = 0
             Dim lockObj As New Object()
+            Dim failed As New List(Of KeyValuePair(Of String, String))
             System.Threading.Tasks.Parallel.ForEach(missing,
                 Sub(item)
                     Dim url = "https://resources.download.minecraft.net/" & item.Key.Substring(0, 2) & "/" & item.Key
                     Try
-                        Http.DownloadFileAuto(url, item.Value)
+                        ' 小文件：30 秒超时，镜像优先；挂起不再拖死整批
+                        Http.DownloadFileAuto(url, item.Value, Nothing, Nothing, 30)
                     Catch
+                        SyncLock lockObj
+                            failed.Add(item)
+                        End SyncLock
                     End Try
                     SyncLock lockObj
                         done += 1
@@ -363,6 +377,19 @@ Namespace Minecraft
                         End If
                     End SyncLock
                 End Sub)
+
+            ' 失败的重试一轮（直接走官方源，60 秒超时）
+            If failed.Count > 0 Then
+                report(String.Format("重试 {0} 个未完成的资源 ...", failed.Count))
+                System.Threading.Tasks.Parallel.ForEach(failed,
+                    Sub(item)
+                        Dim url = "https://resources.download.minecraft.net/" & item.Key.Substring(0, 2) & "/" & item.Key
+                        Try
+                            Http.DownloadFile(url, item.Value, Nothing, Nothing, 60)
+                        Catch
+                        End Try
+                    End Sub)
+            End If
         End Sub
 
         Private Shared Sub ExtractNatives(jarPath As String, nativesDir As String)
