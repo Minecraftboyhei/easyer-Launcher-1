@@ -154,35 +154,38 @@ Namespace Auth
                 Dim refresh As String = ""
                 Dim rfEl As JsonElement
                 If r.TryGetProperty("refresh_token", rfEl) Then refresh = rfEl.GetString()
-                Return XboxToMcProfile(r.GetProperty("access_token").GetString(), refresh)
+                Dim atEl As JsonElement
+                If Not r.TryGetProperty("access_token", atEl) Then
+                    Throw New Exception("微软令牌兑换返回异常（缺少 access_token）。" &
+                                        Environment.NewLine & "原始响应：" & If(resp.Length > 500, resp.Substring(0, 500) & "…", resp))
+                End If
+                Return XboxToMcProfile(atEl.GetString(), refresh)
             End Using
         End Function
 
         ''' <summary>用 MS access_token 完成 XBL→XSTS→MC 链路。</summary>
         Public Shared Function XboxToMcProfile(msAccessToken As String, refreshToken As String) As McProfile
-            ' 1) XBL
+            ' 1) XBL —— 注意：Xbox 账户问题（没有 Xbox/未成年/封禁）在这一步就会返回 XErr
             Dim xblBody = "{""Properties"":{""AuthMethod"":""RPS"",""SiteName"":""user.auth.xboxlive.com"",""RpsTicket"":""d=" & msAccessToken & """},""RelyingParty"":""http://auth.xboxlive.com"",""TokenType"":""JWT""}"
             Dim xblResp = Http.PostJson("https://user.auth.xboxlive.com/user/authenticate", xblBody)
             Using d1 = JsonDocument.Parse(xblResp)
-                Dim xblToken = d1.RootElement.GetProperty("Token").GetString()
-                Dim uhs = d1.RootElement.GetProperty("DisplayClaims").GetProperty("xui")(0).GetProperty("uhs").GetString()
+                ThrowXErrIfPresent(d1.RootElement, "Xbox Live")
+                Dim xblToken = GetStr(d1.RootElement, "Token", "Xbox Live 第一步", xblResp)
+                Dim uhs = GetStr(d1.RootElement.GetProperty("DisplayClaims").GetProperty("xui")(0), "uhs", "Xbox 用户标识", xblResp)
 
                 ' 2) XSTS
                 Dim xstsBody = "{""Properties"":{""SandboxId"":""RETAIL"",""UserTokens"":[""" & xblToken & """]},""RelyingParty"":""rp://api.minecraftservices.com/"",""TokenType"":""JWT""}"
                 Dim xstsResp = Http.PostJson("https://xsts.auth.xboxlive.com/xsts/authorize", xstsBody)
                 Using d2 = JsonDocument.Parse(xstsResp)
                     ' Xbox 认证错误（没有 Xbox 账户 / 未成年 / 被封等）会在这里返回 XErr
-                    Dim xerrEl As JsonElement
-                    If d2.RootElement.TryGetProperty("XErr", xerrEl) Then
-                        Throw New Exception(XstsMessage(xerrEl.GetInt64()))
-                    End If
-                    Dim xstsToken = d2.RootElement.GetProperty("Token").GetString()
+                    ThrowXErrIfPresent(d2.RootElement, "Xbox 安全令牌")
+                    Dim xstsToken = GetStr(d2.RootElement, "Token", "Xbox 安全令牌", xstsResp)
 
                     ' 3) Minecraft
                     Dim mcBody = "{""identityToken"":""XBL3.0 x=" & uhs & ";" & xstsToken & """}"
                     Dim mcResp = Http.PostJson("https://api.minecraftservices.com/authentication/login_with_xbox", mcBody)
                     Using d3 = JsonDocument.Parse(mcResp)
-                        Dim mcToken = d3.RootElement.GetProperty("access_token").GetString()
+                        Dim mcToken = GetStr(d3.RootElement, "access_token", "Minecraft 登录", mcResp)
 
                         ' 4) Profile —— 必须带 Bearer，否则一律 401
                         Dim profileJson As String
@@ -197,8 +200,8 @@ Namespace Auth
                         End Try
                         Using d4 = JsonDocument.Parse(profileJson)
                             Return New McProfile With {
-                                .Name = d4.RootElement.GetProperty("name").GetString(),
-                                .Uuid = d4.RootElement.GetProperty("id").GetString(),
+                                .Name = GetStr(d4.RootElement, "name", "Minecraft 档案", profileJson),
+                                .Uuid = GetStr(d4.RootElement, "id", "Minecraft 档案", profileJson),
                                 .AccessToken = mcToken,
                                 .RefreshToken = refreshToken
                             }
@@ -206,6 +209,22 @@ Namespace Auth
                     End Using
                 End Using
             End Using
+        End Function
+
+        ''' <summary>Xbox 错误响应里带 XErr 就转成人话抛出。</summary>
+        Private Shared Sub ThrowXErrIfPresent(root As JsonElement, stage As String)
+            Dim xerrEl As JsonElement
+            If root.TryGetProperty("XErr", xerrEl) Then
+                Throw New Exception(XstsMessage(xerrEl.GetInt64()))
+            End If
+        End Sub
+
+        ''' <summary>安全取 JSON 字符串字段，缺键时报出阶段名和原始响应（不再裸抛字典错误）。</summary>
+        Private Shared Function GetStr(el As JsonElement, name As String, stage As String, raw As String) As String
+            Dim v As JsonElement
+            If el.TryGetProperty(name, v) Then Return v.GetString()
+            Throw New Exception(stage & " 返回异常（缺少 " & name & " 字段）。" &
+                                Environment.NewLine & "原始响应：" & If(raw.Length > 500, raw.Substring(0, 500) & "…", raw))
         End Function
 
         ''' <summary>Xbox XSTS 错误码 → 人话。</summary>
