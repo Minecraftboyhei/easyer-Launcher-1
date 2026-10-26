@@ -35,6 +35,7 @@ namespace EasyerLauncher.Pages
         private TextBox _offlineName;
         private TextBox _clientId;
         private bool _deviceCodeWaiting = false;
+        private W11Card _leftCard, _rightCard;
 
         public AccountPage(MainForm main)
         {
@@ -43,21 +44,41 @@ namespace EasyerLauncher.Pages
             Build();
         }
 
+        protected override void OnResize(EventArgs eventargs)
+        {
+            base.OnResize(eventargs);
+            LayoutCards();
+        }
+
+        /// <summary>两卡自适应：按内容宽度对半分，不超出窗口。</summary>
+        private void LayoutCards()
+        {
+            if (_leftCard == null || _rightCard == null) return;
+            int total = Math.Max(760, Width - 64);
+            int leftW = (int)(total * 0.52);
+            int rightW = total - leftW - 20;
+            _leftCard.Bounds = new Rectangle(32, 90, leftW, 360);
+            _rightCard.Bounds = new Rectangle(32 + leftW + 20, 90, rightW, 430);
+            _list.Bounds = new Rectangle(16, 16, leftW - 32, 220);
+        }
+
         private void Build()
         {
             Controls.Add(PageUtil.Title("账号"));
 
             // 账号列表
-            var card = new W11Card { Bounds = new Rectangle(32, 90, 560, 360) };
-            Controls.Add(card);
+            _leftCard = new W11Card { Bounds = new Rectangle(32, 90, 560, 360) };
+            Controls.Add(_leftCard);
             _list = new ListBox
             {
                 BorderStyle = BorderStyle.None,
                 Font = Theme.BodyFont,
                 Bounds = new Rectangle(16, 16, 528, 220),
-                IntegralHeight = false
+                IntegralHeight = false,
+                BackColor = Theme.Input,
+                ForeColor = Theme.Foreground
             };
-            card.Controls.Add(_list);
+            _leftCard.Controls.Add(_list);
 
             var useBtn = new W11Button { Text = "切换为当前账号", Bounds = new Rectangle(16, 250, 190, 38) };
             useBtn.Click += (s, e) =>
@@ -69,7 +90,7 @@ namespace EasyerLauncher.Pages
                 _main.SetStatus("当前账号已切换为 " + a.Name);
                 RefreshList();
             };
-            card.Controls.Add(useBtn);
+            _leftCard.Controls.Add(useBtn);
 
             var delBtn = new W11Button { Text = "删除账号", Bounds = new Rectangle(216, 250, 130, 38) };
             delBtn.Click += (s, e) =>
@@ -85,12 +106,12 @@ namespace EasyerLauncher.Pages
                     RefreshList();
                 }
             };
-            card.Controls.Add(delBtn);
+            _leftCard.Controls.Add(delBtn);
 
             // 离线登录
-            var offlineCard = new W11Card { Bounds = new Rectangle(612, 90, 480, 360) };
-            Controls.Add(offlineCard);
-            offlineCard.Controls.Add(new Label
+            _rightCard = new W11Card { Bounds = new Rectangle(612, 90, 480, 400) };
+            Controls.Add(_rightCard);
+            _rightCard.Controls.Add(new Label
             {
                 Text = "离线账号（不需要正版）",
                 Font = Theme.H2Font,
@@ -98,7 +119,7 @@ namespace EasyerLauncher.Pages
                 Location = new Point(20, 16),
                 AutoSize = true
             });
-            offlineCard.Controls.Add(new Label
+            _rightCard.Controls.Add(new Label
             {
                 Text = "输入一个游戏昵称就能玩（只能进离线/局域网服务器）：",
                 ForeColor = Theme.ForegroundDim,
@@ -111,7 +132,7 @@ namespace EasyerLauncher.Pages
                 Bounds = new Rectangle(20, 88, 300, 32),
                 BorderStyle = BorderStyle.FixedSingle
             };
-            offlineCard.Controls.Add(_offlineName);
+            _rightCard.Controls.Add(_offlineName);
 
             var offlineBtn = new W11Button
             {
@@ -138,38 +159,55 @@ namespace EasyerLauncher.Pages
                 RefreshList();
                 _main.SetStatus("离线账号 " + name + " 已添加 ✓");
             };
-            offlineCard.Controls.Add(offlineBtn);
+            _rightCard.Controls.Add(offlineBtn);
 
             // 正版登录
-            offlineCard.Controls.Add(new Label
+            _rightCard.Controls.Add(new Label
             {
                 Text = "Microsoft 正版登录",
                 Font = Theme.H2Font,
                 BackColor = Color.Transparent,
-                Location = new Point(20, 196),
+                Location = new Point(20, 190),
+                AutoSize = true
+            });
+            _rightCard.Controls.Add(new Label
+            {
+                Text = "点「去注册」→ 新注册（免费），账户类型选\n" +
+                       "「仅个人 Microsoft 账户」，复制「应用程序(客户端) ID」\n" +
+                       "再到「身份验证」把「允许公共客户端流」设为「是」。",
+                Font = Theme.SmallFont,
+                ForeColor = Theme.ForegroundDim,
+                BackColor = Color.Transparent,
+                Location = new Point(20, 220),
                 AutoSize = true
             });
             _clientId = new TextBox
             {
-                Bounds = new Rectangle(20, 236, 300, 30),
+                Bounds = new Rectangle(20, 292, 300, 30),
                 BorderStyle = BorderStyle.FixedSingle,
                 Text = _main.Cfg.MsClientId,
-                PlaceholderText = "Azure 应用的 Client ID（GUID）"
+                PlaceholderText = "Azure 应用 Client ID（GUID）"
             };
-            offlineCard.Controls.Add(_clientId);
-            offlineCard.Controls.Add(new Label
-            {
-                Text = "需要自己在 Azure 注册一个应用（免费）：azure.portal → 应用注册 →\r\n受支持账户类型选「个人」→ 平台加「移动应用程序」→ 复制客户端 ID。",
-                Font = Theme.SmallFont,
-                ForeColor = Theme.ForegroundDim,
-                BackColor = Color.Transparent,
-                Location = new Point(20, 272),
-                AutoSize = true
-            });
-            var msBtn = new W11Button { Text = "设备码登录", Bounds = new Rectangle(20, 316, 160, 38) };
-            msBtn.Click += (s, e) => _ = MicrosoftLogin();
-            offlineCard.Controls.Add(msBtn);
+            _rightCard.Controls.Add(_clientId);
 
+            var azureBtn = new W11Button { Text = "去注册", Bounds = new Rectangle(330, 322, 94, 30) };
+            azureBtn.Click += (s, e) =>
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                        "https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/CreateApplicationBlade")
+                    { UseShellExecute = true });
+                }
+                catch (Exception ex) { MessageBox.Show("打开浏览器失败：" + ex.Message, "Easyer"); }
+            };
+            _rightCard.Controls.Add(azureBtn);
+
+            var msBtn = new W11Button { Text = "设备码登录", ButtonKind = W11Button.Kind.Accent, Bounds = new Rectangle(20, 364, 190, 40) };
+            msBtn.Click += (s, e) => _ = MicrosoftLogin();
+            _rightCard.Controls.Add(msBtn);
+
+            LayoutCards();
             RefreshList();
         }
 
@@ -186,7 +224,14 @@ namespace EasyerLauncher.Pages
             var clientId = _clientId.Text.Trim();
             if (clientId.Length == 0)
             {
-                MessageBox.Show("先填入 Azure 应用的 Client ID！", "Easyer");
+                MessageBox.Show("先填入 Azure 应用的 Client ID（点右边「去注册」两分钟搞定）。", "Easyer");
+                return;
+            }
+            if (!Guid.TryParse(clientId, out _))
+            {
+                MessageBox.Show("Client ID 格式不对——应该是一串 GUID，形如\n" +
+                                "00000000-0000-0000-0000-000000000000\n\n" +
+                                "复制的是 Azure 应用概览里的「应用程序(客户端) ID」。", "Easyer");
                 return;
             }
             _main.Cfg.MsClientId = clientId;
@@ -197,10 +242,13 @@ namespace EasyerLauncher.Pages
             try
             {
                 var dc = await Task.Run(() => Core.Auth.MicrosoftAuth.BeginDeviceCode(clientId));
+                // 自动开浏览器 + 代码进剪贴板，少一步手动操作
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dc.VerificationUri) { UseShellExecute = true }); } catch { }
+                try { Clipboard.SetText(dc.UserCode); } catch { }
                 MessageBox.Show(
-                    "1. 打开浏览器访问：\n    " + dc.VerificationUri + "\n\n" +
-                    "2. 输入代码：" + dc.UserCode + "\n\n" +
-                    "点击「确定」后我会开始等待你完成授权……",
+                    "1. 浏览器已打开（没开就手动访问）：\n    " + dc.VerificationUri + "\n\n" +
+                    "2. 粘贴代码（已复制到剪贴板）：" + dc.UserCode + "\n\n" +
+                    "点击「确定」后我会开始等待你完成授权（最多 5 分钟）……",
                     "Microsoft 登录", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 _main.SetStatus("等待微软授权（设备码 " + dc.UserCode + "）...");
 
@@ -228,6 +276,7 @@ namespace EasyerLauncher.Pages
                     Uuid = profile.Uuid,
                     AccessToken = profile.AccessToken,
                     MsRefreshToken = profile.RefreshToken,
+                    MsExpiresAt = DateTime.UtcNow.AddHours(23).ToString("o"),
                     AccountType = "microsoft"
                 });
                 _main.Cfg.ActiveAccountName = profile.Name;

@@ -68,7 +68,14 @@ Namespace Auth
                 Dim r = doc.RootElement
                 Dim errEl As JsonElement
                 If r.TryGetProperty("error", errEl) Then
-                    Throw New Exception("微软登录错误: " & errEl.GetString())
+                    Dim desc = ""
+                    Dim descEl As JsonElement
+                    If r.TryGetProperty("error_description", descEl) Then desc = descEl.GetString()
+                    If desc.Contains("AADSTS700016") Then
+                        Throw New Exception("Client ID 无效：这个应用不存在或不是你账号下的。" & Environment.NewLine &
+                                            "请到 Azure 门户 → 应用注册，新建一个应用并复制它的「应用程序(客户端) ID」。")
+                    End If
+                    Throw New Exception("微软登录错误: " & errEl.GetString() & If(desc <> "", " — " & desc, ""))
                 End If
                 Dim interval As Integer = 5
                 If r.TryGetProperty("interval", errEl) Then interval = CInt(errEl.GetInt32())
@@ -96,7 +103,10 @@ Namespace Auth
                 If r.TryGetProperty("error", errEl) Then
                     Dim err = errEl.GetString()
                     If err = "authorization_pending" OrElse err = "slow_down" Then Return Nothing
-                    Throw New Exception("微软登录错误: " & err)
+                    Dim desc = ""
+                    Dim descEl As JsonElement
+                    If r.TryGetProperty("error_description", descEl) Then desc = descEl.GetString()
+                    Throw New Exception("微软登录错误: " & err & If(desc <> "", " — " & desc, ""))
                 End If
                 Dim msAccessToken = r.GetProperty("access_token").GetString()
                 Dim refreshEl As JsonElement
@@ -120,6 +130,11 @@ Namespace Auth
                 Dim xstsBody = "{""Properties"":{""SandboxId"":""RETAIL"",""UserTokens"":[""" & xblToken & """]},""RelyingParty"":""rp://api.minecraftservices.com/"",""TokenType"":""JWT""}"
                 Dim xstsResp = Http.PostJson("https://xsts.auth.xboxlive.com/xsts/authorize", xstsBody)
                 Using d2 = JsonDocument.Parse(xstsResp)
+                    ' Xbox 认证错误（没有 Xbox 账户 / 未成年 / 被封等）会在这里返回 XErr
+                    Dim xerrEl As JsonElement
+                    If d2.RootElement.TryGetProperty("XErr", xerrEl) Then
+                        Throw New Exception(XstsMessage(xerrEl.GetInt64()))
+                    End If
                     Dim xstsToken = d2.RootElement.GetProperty("Token").GetString()
 
                     ' 3) Minecraft
@@ -128,8 +143,17 @@ Namespace Auth
                     Using d3 = JsonDocument.Parse(mcResp)
                         Dim mcToken = d3.RootElement.GetProperty("access_token").GetString()
 
-                        ' 4) Profile
-                        Dim profileJson = Http.GetString("https://api.minecraftservices.com/minecraft/profile")
+                        ' 4) Profile —— 必须带 Bearer，否则一律 401
+                        Dim profileJson As String
+                        Try
+                            profileJson = Http.GetStringAuth("https://api.minecraftservices.com/minecraft/profile", mcToken)
+                        Catch ex As Exception
+                            If ex.Message.Contains("404") Then
+                                Throw New Exception("这个微软账号还没有 Minecraft：Java 版（未购买或未创建角色名）。" &
+                                                    Environment.NewLine & "请先用官方启动器登录一次、建好角色名，再回来重试。")
+                            End If
+                            Throw
+                        End Try
                         Using d4 = JsonDocument.Parse(profileJson)
                             Return New McProfile With {
                                 .Name = d4.RootElement.GetProperty("name").GetString(),
@@ -141,6 +165,25 @@ Namespace Auth
                     End Using
                 End Using
             End Using
+        End Function
+
+        ''' <summary>Xbox XSTS 错误码 → 人话。</summary>
+        Private Shared Function XstsMessage(code As Long) As String
+            Select Case code
+                Case 2148916233
+                    Return "这个微软账号还没有 Xbox 账户。" & Environment.NewLine &
+                           "请先用它登录一次 xbox.com（免费创建），再回来重试。"
+                Case 2148916235
+                    Return "Xbox Live 在你所在的地区不可用。"
+                Case 2148916236, 2148916237
+                    Return "需要完成成人年龄验证：https://account.live.com/proofs/Manage"
+                Case 2148916238
+                    Return "这是未成年账号，需要家长在 Microsoft 家庭组里批准后才能登录。"
+                Case 2148916227
+                    Return "这个 Xbox 账号已被封禁。"
+                Case Else
+                    Return "Xbox 认证失败（XErr=" & code & "）。"
+            End Select
         End Function
 
         ''' <summary>用 refresh_token 换新 MC 档案（静默续期）。</summary>

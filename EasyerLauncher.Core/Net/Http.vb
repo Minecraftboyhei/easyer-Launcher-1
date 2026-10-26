@@ -56,6 +56,21 @@ Namespace Net
             End Using
         End Function
 
+        ''' <summary>带 Bearer 令牌的 GET。</summary>
+        Public Shared Function GetStringAuth(url As String, bearer As String, Optional timeoutSec As Integer = 20) As String
+            Using cts As New CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec))
+                Using req As New HttpRequestMessage(HttpMethod.Get, url)
+                    req.Headers.Authorization = New Headers.AuthenticationHeaderValue("Bearer", bearer)
+                    Using resp = Client.SendAsync(req, HttpCompletionOption.ResponseContentRead, cts.Token).GetAwaiter().GetResult()
+                        If Not resp.IsSuccessStatusCode Then
+                            Throw New Exception("HTTP " & CInt(resp.StatusCode) & " — " & url)
+                        End If
+                        Return resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                    End Using
+                End Using
+            End Using
+        End Function
+
         ''' <summary>GET 并解析为 JsonDocument（调用方负责 Dispose）。</summary>
         Public Shared Function GetJson(url As String) As JsonDocument
             Return JsonDocument.Parse(GetString(url))

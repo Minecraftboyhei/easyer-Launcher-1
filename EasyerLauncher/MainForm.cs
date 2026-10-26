@@ -69,7 +69,7 @@ namespace EasyerLauncher
             try
             {
                 System.IO.Directory.CreateDirectory(dir);
-                foreach (var key in new[] { "home", "download", "mods", "loaders" })
+                foreach (var key in new[] { "account", "home", "download", "mods", "loaders" })
                 {
                     Navigate(key);
                     await System.Threading.Tasks.Task.Delay(key == "mods" || key == "download" ? 4500 : 2000);
@@ -259,6 +259,50 @@ namespace EasyerLauncher
             SetStatus("正在准备启动 " + versionId + " ...");
             try
             {
+                // 正版账号：令牌 24 小时过期，启动前自动续期
+                if (acc.AccountType == "microsoft" && !string.IsNullOrEmpty(acc.MsRefreshToken))
+                {
+                    bool needRefresh;
+                    if (DateTime.TryParse(acc.MsExpiresAt, out var exp))
+                        needRefresh = DateTime.UtcNow > exp.AddHours(-2);
+                    else
+                        needRefresh = true;
+
+                    if (needRefresh)
+                    {
+                        if (string.IsNullOrWhiteSpace(Cfg.MsClientId))
+                        {
+                            MessageBox.Show("正版登录已过期，但没保存 Azure Client ID，无法自动续期。\n" +
+                                            "请到「账号」页重新登录一次。", "Easyer",
+                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                        else
+                        {
+                            SetStatus("正版令牌续期中 ...");
+                            try
+                            {
+                                var prof = await System.Threading.Tasks.Task.Run(
+                                    () => Core.Auth.MicrosoftAuth.Refresh(Cfg.MsClientId, acc.MsRefreshToken));
+                                acc.Name = prof.Name;
+                                acc.Uuid = prof.Uuid;
+                                acc.AccessToken = prof.AccessToken;
+                                acc.MsRefreshToken = prof.RefreshToken;
+                                acc.MsExpiresAt = DateTime.UtcNow.AddHours(23).ToString("o");
+                                Cfg.ActiveAccountName = acc.Name;
+                                Cfg.Save();
+                                SetStatus("正版令牌已续期 ✓");
+                            }
+                            catch (Exception rex)
+                            {
+                                MessageBox.Show("正版登录续期失败，请到「账号」页重新登录：\n" + rex.Message, "Easyer",
+                                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                Navigate("account");
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 await System.Threading.Tasks.Task.Run(() =>
                 {
                     var opt = new Core.Minecraft.GameLauncher.LaunchOptions
