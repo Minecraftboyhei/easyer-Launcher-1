@@ -185,6 +185,20 @@ Namespace Auth
                     Dim mcBody = "{""identityToken"":""XBL3.0 x=" & uhs & ";" & xstsToken & """}"
                     Dim mcResp = Http.PostJson("https://api.minecraftservices.com/authentication/login_with_xbox", mcBody)
                     Using d3 = JsonDocument.Parse(mcResp)
+                        ' Mojang 对 login_with_xbox 实行 Client ID 白名单：自建 Azure 应用必须先通过官方审核
+                        If mcResp.Contains("Invalid app registration") Then
+                            Throw New Exception(
+                                "你的微软账号、Xbox 认证都已通过 ✓，但最后一步被 Mojang 拦下：" &
+                                Environment.NewLine &
+                                "Mojang 要求所有第三方启动器的应用先通过「Java Edition API 审核」进入白名单，" &
+                                "自建的 Azure 应用默认不在名单里（这不是配置错误，任何设置都改不了）。" &
+                                Environment.NewLine & Environment.NewLine &
+                                "解决办法：" & Environment.NewLine &
+                                "① 到 https://aka.ms/mce-reviewappid 提交 API 审核申请，" &
+                                "填上 Client ID：" & "（见账号页输入框），审核几天到几周，通过后本界面即正常；" &
+                                Environment.NewLine &
+                                "② 现在就想玩：用账号页的「LittleSkin 外置登录」或「离线登录」。")
+                        End If
                         Dim mcToken = GetStr(d3.RootElement, "access_token", "Minecraft 登录", mcResp)
 
                         ' 4) Profile —— 必须带 Bearer，否则一律 401

@@ -174,9 +174,11 @@ namespace EasyerLauncher.Pages
             });
             _rightCard.Controls.Add(new Label
             {
-                Text = "已内置登录应用，开箱即用：点「浏览器登录」→ 浏览器里登\n" +
-                       "录你的微软账号 → 回到启动器就完成。Client ID 一般不用动，\n" +
-                       "只有你自己的应用出问题时才需要换。",
+                Text = "已内置登录应用，账号页开箱即用。\n" +
+                       "注意：Mojang 对第三方启动器实行 API 白名单——\n" +
+                       "自建 Client ID 需到 aka.ms/mce-reviewappid 提交审核\n" +
+                       "（几天到几周）。审核没过之前，正版登录会在最后\n" +
+                       "一步被 Mojang 拦下；现在就能玩：LittleSkin 外置 / 离线登录。",
                 Font = Theme.SmallFont,
                 ForeColor = Theme.ForegroundDim,
                 BackColor = Color.Transparent,
