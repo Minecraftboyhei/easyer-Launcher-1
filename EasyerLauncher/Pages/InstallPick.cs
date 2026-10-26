@@ -182,7 +182,8 @@ namespace EasyerLauncher.Pages
         public InstallOptionList()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
-                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw |
+                     ControlStyles.SupportsTransparentBackColor, true);
         }
 
         public void SetGame(string gameId) { _gameId = gameId; Invalidate(); }

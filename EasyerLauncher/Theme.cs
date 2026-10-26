@@ -121,8 +121,13 @@ namespace EasyerLauncher
                 {
                     c.BackColor = Input; c.ForeColor = Foreground; continue;
                 }
-                c.BackColor = Color.Transparent;
                 c.ForeColor = Foreground;
+                try { c.BackColor = Color.Transparent; }
+                catch
+                {
+                    // 控件不支持透明（未开 SupportsTransparentBackColor），退回不透明底色
+                    c.BackColor = BackdropOf(c);
+                }
                 ApplyTo(c);
             }
         }
