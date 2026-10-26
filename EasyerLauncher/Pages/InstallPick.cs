@@ -47,6 +47,7 @@ namespace EasyerLauncher.Pages
 
             _list = new InstallOptionList { Bounds = new Rectangle(24, 60, 500, 250) };
             _list.SetGame(gameId);
+            _list.OnConfirm = Next;   // 双击行直接开始
             Controls.Add(_list);
 
             _nextBtn = new W11Button
@@ -103,7 +104,7 @@ namespace EasyerLauncher.Pages
                 if (tip != null)
                 {
                     int ok = counts.Count(kv => kv.Value > 0);
-                    tip.Text = ok + " 种加载器可用，选中后点「下一步」；NeoForge 仅支持 1.20.1+";
+                    tip.Text = "原版可直接安装；加载器选中后点「下一步」或直接双击该行";
                 }
             }
             catch (Exception ex)
@@ -169,6 +170,7 @@ namespace EasyerLauncher.Pages
         public const int RowH = 46;
 
         public string SelectedKey => _selectedIndex >= 0 ? Options[_selectedIndex].Key : null;
+        public Action OnConfirm;  // 双击行 = 直接确认
 
         private static readonly (string Key, string Title, string Sub)[] Options =
         {
@@ -178,6 +180,9 @@ namespace EasyerLauncher.Pages
             ("neoforge", "NeoForge", "Forge 新锐分支（1.20.1+）"),
             ("forge",    "Forge",  "老牌大哥，历史模组都在这"),
         };
+
+        /// <summary>原版永远可用；加载器行看检测结果。</summary>
+        private bool Available(int i) => i == 0 || _counts[i] >= 0;
 
         public InstallOptionList()
         {
@@ -206,10 +211,22 @@ namespace EasyerLauncher.Pages
         {
             base.OnMouseClick(e);
             int row = e.Y / RowH;
-            if (row >= 0 && row < Options.Length && _counts[row] >= 0)
+            if (row >= 0 && row < Options.Length && Available(row))
             {
                 _selectedIndex = row;
                 Invalidate();
+            }
+        }
+
+        protected override void OnMouseDoubleClick(MouseEventArgs e)
+        {
+            base.OnMouseDoubleClick(e);
+            int row = e.Y / RowH;
+            if (row >= 0 && row < Options.Length && Available(row))
+            {
+                _selectedIndex = row;
+                Invalidate();
+                OnConfirm?.Invoke();
             }
         }
 
@@ -223,7 +240,7 @@ namespace EasyerLauncher.Pages
             {
                 var rect = new Rectangle(0, i * RowH + 2, Width - 1, RowH - 4);
                 bool sel = i == _selectedIndex;
-                bool disabled = _counts[i] < 0;
+                bool disabled = !Available(i);
 
                 using (var path = Theme.RoundedPath(rect, 10))
                 {
@@ -242,16 +259,25 @@ namespace EasyerLauncher.Pages
                     new Rectangle(rect.X + 16, rect.Y + 24, 340, 18), Theme.ForegroundDim,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
-                // 右侧状态
-                string state = _counts[i] switch
+                // 右侧状态（原版永远就绪）
+                string state;
+                Color stateColor;
+                if (i == 0)
                 {
-                    -2 => "检测中 …",
-                    -1 => "不支持",
-                    0 => "无可用版本",
-                    _ => "✓ " + _counts[i] + " 个版本",
-                };
-                var stateColor = _counts[i] > 0 ? Color.FromArgb(52, 211, 153) :
-                                 _counts[i] == -1 || _counts[i] == 0 ? Theme.ForegroundDim : Theme.ForegroundDim;
+                    state = "✓ 可直接安装";
+                    stateColor = Color.FromArgb(52, 211, 153);
+                }
+                else
+                {
+                    state = _counts[i] switch
+                    {
+                        -2 => "检测中 …",
+                        -1 => "不支持",
+                        0 => "无可用版本",
+                        _ => "✓ " + _counts[i] + " 个版本",
+                    };
+                    stateColor = _counts[i] > 0 ? Color.FromArgb(52, 211, 153) : Theme.ForegroundDim;
+                }
                 TextRenderer.DrawText(g, state, Theme.SmallFont,
                     new Rectangle(rect.Right - 130, rect.Y + 4, 118, 20), stateColor,
                     TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
@@ -291,6 +317,7 @@ namespace EasyerLauncher.Pages
 
             _list = new LoaderVersionList { Bounds = new Rectangle(24, 58, 500, 300) };
             _list.SetItems(versions, loaderKey == "fabric" ? 0 : loaderKey == "quilt" ? 1 : loaderKey == "forge" ? 2 : 3);
+            _list.ItemActivated = () => { Go(); Close(); };   // 双击版本直接开装
             Controls.Add(_list);
 
             var ok = new W11Button

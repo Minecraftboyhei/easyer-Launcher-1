@@ -280,6 +280,7 @@ namespace EasyerLauncher.Pages
         private const int RowH = 30;
 
         public event Action SelectionChanged;
+        public Action ItemActivated;  // 双击行 = 直接确认
 
         public string SelectedItem =>
             _selectedIndex >= 0 && _selectedIndex < _items.Count ? _items[_selectedIndex] : null;
@@ -325,6 +326,18 @@ namespace EasyerLauncher.Pages
                 _selectedIndex = row;
                 Invalidate();
                 SelectionChanged?.Invoke();
+            }
+        }
+
+        protected override void OnMouseDoubleClick(MouseEventArgs e)
+        {
+            base.OnMouseDoubleClick(e);
+            int row = (e.Y + _scroll) / RowH;
+            if (row >= 0 && row < _items.Count)
+            {
+                _selectedIndex = row;
+                Invalidate();
+                ItemActivated?.Invoke();
             }
         }
 
