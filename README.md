@@ -3,6 +3,9 @@
 一个用 **C#（界面）+ VB.NET（核心库）** 写的 Minecraft Java 版启动器，Windows 11 / PCL2 风格。
 **下载即用，不用装 .NET、不用填任何配置。**
 
+> **此项目为 vibe code** —— 全程与 AI 结对、靠对话和截图迭代出来的，没有手写工程规范，也没有代码洁癖。
+> 它能跑、能装游戏、能下 MOD，但请以「够用就好」的心态阅读源码。
+
 ## 下载
 
 到 [Releases](https://github.com/Minecraftboyhei/easyer-Launcher-1/releases) 下最新的 `EasyerLauncher-win-x64.zip`，
