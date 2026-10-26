@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish (self-contained, single file)
+        run: >
+          dotnet publish EasyerLauncher/EasyerLauncher.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=None -p:DebugSymbols=false
+          -o dist/win-x64
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/win-x64/EasyerLauncher.exe `
+            -DestinationPath EasyerLauncher-win-x64.zip -CompressionLevel Optimal
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: EasyerLauncher-win-x64.zip
+          fail_on_unmatched_files: true
