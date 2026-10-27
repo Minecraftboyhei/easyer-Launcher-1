@@ -8,8 +8,9 @@
 
 ## 下载
 
-到 [Releases](https://github.com/Minecraftboyhei/easyer-Launcher-1/releases) 下最新的 `EasyerLauncher-win-x64.zip`，
-解压后双击 `EasyerLauncher.exe` 即可（自带运行时，Win10/11 x64 通用）。
+到 [Releases](https://github.com/Minecraftboyhei/easyer-Launcher-1/releases) 下 `EasyerLauncher.exe`，
+**双击就能用**——单文件、自带 .NET 运行时，不用解压、不用安装、不用填任何配置（Win10/11 x64）。
+程序只有一个 exe，删掉即卸载，配置和游戏放 `%APPDATA%\.easyer`。
 
 ## 登录方式
 
