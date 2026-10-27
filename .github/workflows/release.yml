@@ -26,19 +26,14 @@ jobs:
           -c Release -r win-x64 --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
           -p:DebugType=None -p:DebugSymbols=false
           -o dist/win-x64
-
-      - name: Zip
-        shell: pwsh
-        run: |
-          Compress-Archive -Path dist/win-x64/EasyerLauncher.exe `
-            -DestinationPath EasyerLauncher-win-x64.zip -CompressionLevel Optimal
 
       - name: Attach to release
         uses: softprops/action-gh-release@v2
         with:
           name: Easyer Launcher 1 ${{ github.ref_name }}
           body_path: .github/release-notes.md
-          files: EasyerLauncher-win-x64.zip
+          files: dist/win-x64/EasyerLauncher.exe
           fail_on_unmatched_files: true
