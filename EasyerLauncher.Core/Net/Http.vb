@@ -34,8 +34,10 @@ Namespace Net
             ApiClient.DefaultRequestHeaders.UserAgent.ParseAdd(ua)
         End Sub
 
-        ''' <summary>GET 并自动重试一次（对付代理偶发挂起）。</summary>
-        Public Shared Function GetString(url As String, Optional timeoutSec As Integer = 20) As String
+        ''' <summary>GET 并自动重试一次（对付代理偶发挂起）。retry=False 时快速失败，供多源切换使用。</summary>
+        Public Shared Function GetString(url As String, Optional timeoutSec As Integer = 20,
+                                        Optional retry As Boolean = True) As String
+            If Not retry Then Return GetStringOnce(url, timeoutSec)
             Try
                 Return GetStringOnce(url, timeoutSec)
             Catch ex As Exception When TypeOf ex Is OperationCanceledException OrElse

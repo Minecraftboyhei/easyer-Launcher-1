@@ -8,7 +8,47 @@ Namespace Marketplace
     ''' <summary>Modrinth 内容源：MOD / 资源包 / 光影 / 数据包 搜索与下载。</summary>
     Public Class ModrinthClient
 
+        ''' <summary>官方接口（境外，部分网络不可达）。</summary>
         Public Const ApiBase As String = "https://api.modrinth.com/v2"
+
+        ''' <summary>可用接口源，按优先顺序：国内镜像（MCIM，秒开）→ 官方兜底。会记住上次成功的那个。</summary>
+        Private Shared ReadOnly ApiBases As String() = {
+            "https://mod.mcimirror.top/modrinth/v2",
+            "https://api.modrinth.com/v2"
+        }
+        Private Shared _baseIndex As Integer = 0
+        Private Shared ReadOnly _baseLock As New Object()
+
+        ''' <summary>当前正在用的接口源（供界面提示）。</summary>
+        Public Shared ReadOnly Property ActiveApiBase As String
+            Get
+                Return ApiBases(_baseIndex)
+            End Get
+        End Property
+
+        ''' <summary>
+        ''' 按源依次请求 JSON：官方 8 秒不通就切镜像，成功的一方会被记住，后续直接走它。
+        ''' </summary>
+        Private Shared Function GetJsonAuto(pathAndQuery As String) As JsonDocument
+            Dim start = _baseIndex
+            Dim lastErr As Exception = Nothing
+            For attempt = 0 To ApiBases.Length - 1
+                Dim idx = (start + attempt) Mod ApiBases.Length
+                Dim url = ApiBases(idx) & pathAndQuery
+                Try
+                    Dim txt = Http.GetString(url, 8, False)   ' 快速失败，不重试，否则切源要等半分钟
+                    Dim doc = JsonDocument.Parse(txt)
+                    SyncLock _baseLock
+                        _baseIndex = idx
+                    End SyncLock
+                    Return doc
+                Catch ex As Exception
+                    lastErr = ex
+                End Try
+            Next
+            Throw New Exception("Modrinth 接口连不上（官方和国内镜像都没响应）。" & Environment.NewLine &
+                                "请检查网络或代理设置后重试；离线安装不受影响。", lastErr)
+        End Function
 
         Public Enum ContentType
             Mods = 0
@@ -73,11 +113,11 @@ Namespace Marketplace
             If Not String.IsNullOrEmpty(loader) AndAlso t = ContentType.Mods Then facets.Add("categories:" & loader)
 
             Dim facetsJson = JsonSerializer.Serialize(New List(Of List(Of String)) From {facets})
-            Dim url = ApiBase & "/search?limit=" & limit & "&query=" & Uri.EscapeDataString(query) &
-                      "&facets=" & Uri.EscapeDataString(facetsJson)
+            Dim path = "/search?limit=" & limit & "&query=" & Uri.EscapeDataString(query) &
+                       "&facets=" & Uri.EscapeDataString(facetsJson)
 
             Dim result As New List(Of SearchResult)
-            Using doc = Http.GetJson(url)
+            Using doc = GetJsonAuto(path)
                 For Each hit In doc.RootElement.GetProperty("hits").EnumerateArray()
                     Dim el As JsonElement
                     Dim sr As New SearchResult With {
@@ -106,7 +146,7 @@ Namespace Marketplace
         Public Shared Function GetVersions(slug As String,
                                            Optional gameVersion As String = Nothing,
                                            Optional loader As String = Nothing) As List(Of VersionFile)
-            Dim url = ApiBase & "/project/" & slug & "/version"
+            Dim url = "/project/" & slug & "/version"
             Dim params As New List(Of String)
             If Not String.IsNullOrEmpty(gameVersion) Then
                 params.Add("game_versions=" & Uri.EscapeDataString(JsonSerializer.Serialize(New List(Of String) From {gameVersion})))
@@ -117,7 +157,7 @@ Namespace Marketplace
             If params.Count > 0 Then url &= "?" & String.Join("&", params)
 
             Dim result As New List(Of VersionFile)
-            Using doc = Http.GetJson(url)
+            Using doc = GetJsonAuto(url)
                 For Each v In doc.RootElement.EnumerateArray()
                     Dim vf As New VersionFile With {
                         .Id = v.GetProperty("id").GetString(),

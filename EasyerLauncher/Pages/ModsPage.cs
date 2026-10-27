@@ -176,6 +176,15 @@ namespace EasyerLauncher.Pages
                 if (gen != _searchGen || IsDisposed) return;
                 if (hint != null) hint.Text = "";
                 _main.SetStatus("搜索失败：" + ex.Message);
+                _flow.Controls.Add(new Label
+                {
+                    Text = "加载失败：" + ex.Message + "\n\n请检查网络后点「搜索」重试。",
+                    ForeColor = Theme.ForegroundDim,
+                    BackColor = Color.Transparent,
+                    Font = Theme.BodyFont,
+                    AutoSize = true,
+                    Padding = new Padding(16)
+                });
             }
         }
 
