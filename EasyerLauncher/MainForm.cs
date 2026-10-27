@@ -30,7 +30,9 @@ namespace EasyerLauncher
         public MainForm()
         {
             Cfg = LauncherConfig.Load();
-            if (string.IsNullOrEmpty(Cfg.GameDirectory)) Cfg.GameDirectory = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\.easyer";
+            // 便携模式：默认用 exe 同级的 .minecraft（老数据自动迁移/联接）
+            Cfg.GameDirectory = LauncherConfig.EnsureGameDirectory(Cfg);
+            try { Cfg.Save(); } catch { }
 
             Text = "Easyer Launcher 1";
             StartPosition = FormStartPosition.CenterScreen;

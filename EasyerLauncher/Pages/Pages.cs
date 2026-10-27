@@ -456,7 +456,7 @@ namespace EasyerLauncher.Pages
             // 游戏与 Java
             var card1 = new W11Card { Bounds = new Rectangle(x, 90, w1, 250) };
             Controls.Add(card1);
-            card1.Controls.Add(Mk("游戏目录", 24, 20));
+            card1.Controls.Add(Mk("游戏目录（默认 = 启动器同级的 .minecraft）", 24, 20));
             _gameDir = new TextBox { Bounds = new Rectangle(24, 48, 520, 32), BorderStyle = BorderStyle.FixedSingle, Text = cfg.GameDirectory };
             card1.Controls.Add(_gameDir);
             var browseBtn = new W11Button { Text = "浏览", Bounds = new Rectangle(556, 47, 90, 34) };

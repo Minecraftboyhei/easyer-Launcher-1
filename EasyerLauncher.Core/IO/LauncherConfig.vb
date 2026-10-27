@@ -1,4 +1,5 @@
 Imports System.IO
+Imports System.Linq
 Imports System.Text.Json
 
 Namespace Config
@@ -6,8 +7,8 @@ Namespace Config
     ''' <summary>启动器配置。</summary>
     Public Class LauncherConfig
 
-        Public Property GameDirectory As String = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".easyer")
+        ''' <summary>游戏目录。留空 = 走便携逻辑（exe 同级的 .minecraft），启动时由 EnsureGameDirectory 决定。</summary>
+        Public Property GameDirectory As String = ""
 
         Public Property JavaPath As String = "java"
         Public Property MaxMemoryMB As Integer = 4096
@@ -31,6 +32,108 @@ Namespace Config
 
         Public Shared Function DefaultPath() As String
             Return Path.Combine(AppContext.BaseDirectory, "easyer-config.json")
+        End Function
+
+        ''' <summary>便携游戏目录：exe 所在的同一目录下的 .minecraft。</summary>
+        Public Shared Function PortableGameDir() As String
+            Return Path.Combine(AppContext.BaseDirectory, ".minecraft")
+        End Function
+
+        ''' <summary>旧版默认目录（%APPDATA%\.easyer），仅用于迁移与回退。</summary>
+        Public Shared Function LegacyGameDir() As String
+            Return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".easyer")
+        End Function
+
+        ''' <summary>
+        ''' 决定本次运行使用的游戏目录，并确保它存在。
+        ''' 默认 = exe 同级的 .minecraft（便携，整个文件夹可以带着走）；
+        ''' exe 所在位置不可写（如 Program Files）时回退到 %APPDATA%\.easyer；
+        ''' 老用户数据在旧目录时自动搬过来——同盘直接重命名（瞬间完成），
+        ''' 跨盘则建一个目录联接（junction），不复制几十 G 的游戏文件。
+        ''' </summary>
+        Public Shared Function EnsureGameDirectory(cfg As LauncherConfig) As String
+            Dim portableDir = PortableGameDir()
+            Dim legacyDir = LegacyGameDir()
+
+            ' ---- exe 目录可写吗 ----
+            Dim portableOk As Boolean = False
+            Try
+                Directory.CreateDirectory(portableDir)
+                Dim probe = Path.Combine(portableDir, ".write-test")
+                File.WriteAllText(probe, "ok")
+                File.Delete(probe)
+                portableOk = True
+            Catch
+                portableOk = False
+            End Try
+
+            If Not portableOk Then
+                Try
+                    Directory.CreateDirectory(legacyDir)
+                Catch
+                End Try
+                Return legacyDir
+            End If
+
+            ' ---- 用户自己指定过别的目录，尊重 ----
+            Dim current = If(cfg Is Nothing, "", If(cfg.GameDirectory, "").Trim())
+            If current.Length > 0 AndAlso Not SamePath(current, legacyDir) AndAlso Not SamePath(current, portableDir) Then
+                Try
+                    Directory.CreateDirectory(current)
+                Catch
+                End Try
+                Return current
+            End If
+
+            ' ---- 旧数据 >= 便携目录为空 → 迁移 ----
+            If DirHasContent(legacyDir) AndAlso Not DirHasContent(portableDir) Then
+                Try
+                    Directory.Delete(portableDir, True)
+                    Directory.Move(legacyDir, portableDir)          ' 同盘：仅重命名，瞬间完成
+                    Try
+                        Directory.CreateDirectory(portableDir)
+                    Catch
+                    End Try
+                    Return portableDir
+                Catch
+                    ' 跨盘：建目录联接（不复制文件，不占额外空间）
+                    Try
+                        Try
+                            Directory.Delete(portableDir, True)
+                        Catch
+                        End Try
+                        Dim psi As New ProcessStartInfo("cmd.exe",
+                            "/c mklink /J """ & portableDir & """ """ & legacyDir & """") With {
+                            .CreateNoWindow = True, .UseShellExecute = False}
+                        Using p = Process.Start(psi)
+                            p.WaitForExit(5000)
+                        End Using
+                        If Directory.Exists(portableDir) Then Return portableDir
+                    Catch
+                    End Try
+                    ' 两条路都失败：留在旧目录，绝不让已有游戏"消失"
+                    Return legacyDir
+                End Try
+            End If
+
+            Return portableDir
+        End Function
+
+        Private Shared Function DirHasContent(path As String) As Boolean
+            Try
+                Return Directory.Exists(path) AndAlso Directory.EnumerateFileSystemEntries(path).Any()
+            Catch
+                Return False
+            End Try
+        End Function
+
+        Private Shared Function SamePath(a As String, b As String) As Boolean
+            Try
+                Return String.Equals(Path.GetFullPath(a).TrimEnd("\"c), Path.GetFullPath(b).TrimEnd("\"c),
+                                     StringComparison.OrdinalIgnoreCase)
+            Catch
+                Return False
+            End Try
         End Function
 
         Public Shared Function Load() As LauncherConfig
