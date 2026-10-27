@@ -27,6 +27,9 @@ Namespace Config
         Public Property Accounts As New List(Of AccountInfo)
         Public Property ActiveAccountName As String = ""
 
+        ' ==== 整合包实例 ====
+        Public Property Instances As New List(Of InstanceInfo)
+
         ' ==== 正版登录（需自建 Azure 应用后填入 ClientId）====
         Public Property MsClientId As String = ""
 
@@ -85,35 +88,45 @@ Namespace Config
                 Return current
             End If
 
-            ' ---- 旧数据 >= 便携目录为空 → 迁移 ----
+            ' ---- 旧数据存在且便携目录为空 → 迁移 ----
+            ' 安全规则：只有同一磁盘分区才允许 Directory.Move（原子重命名，不可能半途而废）。
+            ' 跨盘绝不 Move——.NET 跨盘 Move 是逐文件复制+删除，中断会两头丢数据，血泪教训。
             If DirHasContent(legacyDir) AndAlso Not DirHasContent(portableDir) Then
+                Dim sameVolume As Boolean = False
                 Try
-                    Directory.Delete(portableDir, True)
-                    Directory.Move(legacyDir, portableDir)          ' 同盘：仅重命名，瞬间完成
-                    Try
-                        Directory.CreateDirectory(portableDir)
-                    Catch
-                    End Try
-                    Return portableDir
+                    sameVolume = String.Equals(Path.GetPathRoot(Path.GetFullPath(portableDir)),
+                                               Path.GetPathRoot(Path.GetFullPath(legacyDir)),
+                                               StringComparison.OrdinalIgnoreCase)
                 Catch
-                    ' 跨盘：建目录联接（不复制文件，不占额外空间）
+                End Try
+
+                If sameVolume Then
                     Try
-                        Try
-                            Directory.Delete(portableDir, True)
-                        Catch
-                        End Try
-                        Dim psi As New ProcessStartInfo("cmd.exe",
-                            "/c mklink /J """ & portableDir & """ """ & legacyDir & """") With {
-                            .CreateNoWindow = True, .UseShellExecute = False}
-                        Using p = Process.Start(psi)
-                            p.WaitForExit(5000)
-                        End Using
-                        If Directory.Exists(portableDir) Then Return portableDir
+                        Directory.Delete(portableDir, True)
+                        Directory.Move(legacyDir, portableDir)      ' 同盘：仅重命名，瞬间完成
+                        Return portableDir
+                    Catch
+                        ' Move 失败（极罕见），落到联接方案
+                    End Try
+                End If
+
+                ' 跨盘（或同盘 Move 失败）：建目录联接，原数据一个字节都不动
+                Try
+                    Try
+                        Directory.Delete(portableDir, True)
                     Catch
                     End Try
-                    ' 两条路都失败：留在旧目录，绝不让已有游戏"消失"
-                    Return legacyDir
+                    Dim psi As New ProcessStartInfo("cmd.exe",
+                        "/c mklink /J """ & portableDir & """ """ & legacyDir & """") With {
+                        .CreateNoWindow = True, .UseShellExecute = False}
+                    Using p = Process.Start(psi)
+                        p.WaitForExit(5000)
+                    End Using
+                    If Directory.Exists(portableDir) Then Return portableDir
+                Catch
                 End Try
+                ' 联接也失败：留在旧目录，绝不让已有游戏"消失"
+                Return legacyDir
             End If
 
             Return portableDir
@@ -178,6 +191,18 @@ Namespace Config
         Public Property MsRefreshToken As String = ""   ' 正版刷新令牌
         Public Property MsExpiresAt As String = ""      ' token 过期时间（本地）
         Public Property AuthServer As String = ""       ' 外置登录的认证服务器名（littleskin 等）
+    End Class
+
+    ''' <summary>整合包实例：独立 gameDir（mods/存档隔离），版本库仍共用全局目录。</summary>
+    Public Class InstanceInfo
+        Public Property Id As String = ""              ' 版本 id，同时是 versions/<id> 目录名
+        Public Property Name As String = ""            ' 显示名（整合包名称）
+        Public Property GameVersion As String = ""
+        Public Property Loader As String = ""          ' fabric / quilt / forge / neoforge / 空
+        Public Property LoaderVersion As String = ""
+        Public Property IconUrl As String = ""
+        Public Property PackSlug As String = ""
+        Public Property Dir As String = ""             ' 实例 gameDir
     End Class
 
 End Namespace

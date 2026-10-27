@@ -23,6 +23,7 @@ namespace EasyerLauncher
             ("download", "下载",       "\uE896"),  // Download
             ("loaders",  "加载器",     "\uE90F"),  // Repair
             ("mods",     "模组 / 资源", "\uEA86"),  // Puzzle
+            ("packs",    "整合包",      "\uE7B8"),  // Package
             ("account",  "账号",       "\uE77B"),  // Contact
             ("settings", "设置",       "\uE713"),  // Setting s
         };
@@ -71,7 +72,7 @@ namespace EasyerLauncher
             try
             {
                 System.IO.Directory.CreateDirectory(dir);
-                foreach (var key in new[] { "account", "home", "download", "mods", "loaders" })
+                foreach (var key in new[] { "account", "home", "download", "mods", "packs", "loaders" })
                 {
                     Navigate(key);
                     await System.Threading.Tasks.Task.Delay(key == "mods" || key == "download" ? 4500 : 2000);
@@ -202,6 +203,7 @@ namespace EasyerLauncher
                     "download" => new Pages.DownloadsPage(this),
                     "loaders" => new Pages.LoadersPage(this),
                     "mods" => new Pages.ModsPage(this),
+                    "packs" => new Pages.ModpacksPage(this),
                     "account" => new Pages.AccountPage(this),
                     "settings" => new Pages.SettingsPage(this),
                     _ => new Panel()
@@ -317,10 +319,14 @@ namespace EasyerLauncher
 
                 await System.Threading.Tasks.Task.Run(() =>
                 {
+                    // 整合包实例：版本库共用全局目录，gameDir 指向实例目录（mods/存档隔离）
+                    var inst = Cfg.Instances.Find(i =>
+                        string.Equals(i.Id, versionId, StringComparison.OrdinalIgnoreCase));
                     var opt = new Core.Minecraft.GameLauncher.LaunchOptions
                     {
                         VersionId = versionId,
-                        GameDir = Cfg.GameDirectory,
+                        GameDir = inst != null && System.IO.Directory.Exists(inst.Dir) ? inst.Dir : Cfg.GameDirectory,
+                        RootDir = Cfg.GameDirectory,
                         JavaPath = Cfg.JavaPath,
                         MaxMemoryMB = Cfg.MaxMemoryMB,
                         MinMemoryMB = 512,

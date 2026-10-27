@@ -15,6 +15,7 @@ Namespace Marketplace
             ResourcePack = 1
             Shader = 2
             DataPack = 3
+            Modpack = 4
         End Enum
 
         Public Class SearchResult
@@ -47,6 +48,7 @@ Namespace Marketplace
                 Case ContentType.ResourcePack : Return "project_type:resourcepack"
                 Case ContentType.Shader : Return "project_type:shader"
                 Case ContentType.DataPack : Return "project_type:datapack"
+                Case ContentType.Modpack : Return "project_type:modpack"
             End Select
             Return "project_type:mod"
         End Function
@@ -56,6 +58,7 @@ Namespace Marketplace
                 Case "resourcepack" : Return ContentType.ResourcePack
                 Case "shader" : Return ContentType.Shader
                 Case "datapack" : Return ContentType.DataPack
+                Case "modpack" : Return ContentType.Modpack
                 Case Else : Return ContentType.Mods
             End Select
         End Function
@@ -142,8 +145,11 @@ Namespace Marketplace
             Return result
         End Function
 
-        ''' <summary>下载内容到对应目录（mods / resourcepacks / shaderpacks / datapacks）。</summary>
+        ''' <summary>下载内容到对应目录（mods / resourcepacks / shaderpacks / datapacks）。整合包请用 MrpackInstaller。</summary>
         Public Shared Sub Download(file As VersionFile, t As ContentType, gameDir As String, report As Action(Of String))
+            If t = ContentType.Modpack Then
+                Throw New Exception("整合包要用 MrpackInstaller 安装，不能直接放进目录")
+            End If
             Dim subDir As String
             Select Case t
                 Case ContentType.Mods : subDir = "mods"

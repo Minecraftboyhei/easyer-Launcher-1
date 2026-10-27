@@ -285,13 +285,13 @@ namespace EasyerLauncher.Pages
         }
     }
 
-    /// <summary>加载器版本选择弹窗（列表式）。</summary>
+    /// <summary>加载器版本选择弹窗（图形卡片，单击选中）。</summary>
     internal class LoaderVersionPickForm : Form
     {
         private readonly MainForm _main;
         private readonly string _gameId, _loaderKey;
         private readonly List<string> _versions;
-        private readonly LoaderVersionList _list;
+        private readonly CardPicker _picker;
 
         public LoaderVersionPickForm(MainForm main, string gameId, string loaderKey, List<string> versions)
         {
@@ -301,7 +301,7 @@ namespace EasyerLauncher.Pages
             _versions = versions;
 
             Text = loaderKey + " 版本 — " + gameId;
-            Size = new Size(560, 500);
+            Size = new Size(620, 560);
             StartPosition = FormStartPosition.CenterParent;
             MinimizeBox = false;
             MaximizeBox = false;
@@ -311,14 +311,24 @@ namespace EasyerLauncher.Pages
             {
                 Text = "选一个 " + loaderKey + " 版本（第一个通常是最新版）",
                 Font = new Font(Theme.DefaultFontFamily, 12f, FontStyle.Bold),
-                Bounds = new Rectangle(24, 18, 500, 30)
+                ForeColor = Theme.Foreground,
+                BackColor = Color.Transparent,
+                Bounds = new Rectangle(24, 18, 560, 30)
             };
             Controls.Add(title);
 
-            _list = new LoaderVersionList { Bounds = new Rectangle(24, 58, 500, 300) };
-            _list.SetItems(versions, loaderKey == "fabric" ? 0 : loaderKey == "quilt" ? 1 : loaderKey == "forge" ? 2 : 3);
-            _list.ItemActivated = () => { Go(); Close(); };   // 双击版本直接开装
-            Controls.Add(_list);
+            _picker = new CardPicker
+            {
+                Bounds = new Rectangle(24, 56, 560, 400),
+                CardSize = new Size(176, 58)
+            };
+            _picker.SetItems(versions.Select((v, i) => new CardPicker.Item
+            {
+                Title = v,
+                Sub = _loaderKey,
+                Badge = i == 0 ? "最新" : ""
+            }));
+            Controls.Add(_picker);
 
             var ok = new W11Button
             {
@@ -326,7 +336,7 @@ namespace EasyerLauncher.Pages
                 IconGlyph = "\uE73E",
                 ButtonKind = W11Button.Kind.Accent,
                 Font = new Font(Theme.DefaultFontFamily, 11f, FontStyle.Bold),
-                Bounds = new Rectangle(24, 380, 200, 46)
+                Bounds = new Rectangle(24, 464, 200, 46)
             };
             ok.Click += (s, e) => { Go(); Close(); };
             Controls.Add(ok);
@@ -335,7 +345,7 @@ namespace EasyerLauncher.Pages
             {
                 Text = "取消",
                 ButtonKind = W11Button.Kind.Ghost,
-                Bounds = new Rectangle(244, 382, 110, 42)
+                Bounds = new Rectangle(244, 466, 110, 42)
             };
             cancel.Click += (s, e) => Close();
             Controls.Add(cancel);
@@ -346,8 +356,8 @@ namespace EasyerLauncher.Pages
 
         private void Go()
         {
-            var v = _list.SelectedItem;
-            if (v == null) { MessageBox.Show("先选一个版本！", "Easyer"); return; }
+            var v = _picker.SelectedItem?.Title;
+            if (string.IsNullOrEmpty(v)) { MessageBox.Show("先选一个版本！", "Easyer"); return; }
             Installer.BeginWithLoader(_main, _gameId, _loaderKey, v);
         }
     }

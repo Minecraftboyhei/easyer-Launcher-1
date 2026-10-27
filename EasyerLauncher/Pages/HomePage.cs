@@ -12,7 +12,7 @@ namespace EasyerLauncher.Pages
     public class HomePage : Panel
     {
         private readonly MainForm _main;
-        private ComboBox _versionCombo;
+        private CardPicker _versionPick;
         private Label _accountLabel;
 
         public HomePage(MainForm main)
@@ -71,20 +71,18 @@ namespace EasyerLauncher.Pages
                 Location = new Point(32, 76),
                 AutoSize = true
             });
-            _versionCombo = new ComboBox
+            _versionPick = new CardPicker
             {
-                Bounds = new Rectangle(32, 100, 400, 38),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                FlatStyle = FlatStyle.Flat,
-                Font = Theme.BodyFont
+                Bounds = new Rectangle(32, 100, 700, 68),
+                CardSize = new Size(168, 60)
             };
-            _launchCard.Controls.Add(_versionCombo);
+            _launchCard.Controls.Add(_versionPick);
 
             var refreshBtn = new W11Button
             {
                 Text = "刷新",
                 IconGlyph = "\uE72C",  // Refresh
-                Bounds = new Rectangle(448, 101, 96, 36)
+                Bounds = new Rectangle(748, 116, 96, 36)
             };
             refreshBtn.Click += (s, e) => LoadVersions();
             _launchCard.Controls.Add(refreshBtn);
@@ -93,7 +91,7 @@ namespace EasyerLauncher.Pages
             {
                 BackColor = Color.Transparent,
                 Font = Theme.BodyFont,
-                Location = new Point(32, 152),
+                Location = new Point(32, 178),
                 AutoSize = true
             };
             _launchCard.Controls.Add(_accountLabel);
@@ -104,12 +102,16 @@ namespace EasyerLauncher.Pages
                 IconGlyph = "\uE768",  // Play
                 ButtonKind = W11Button.Kind.Accent,
                 Font = new Font(Theme.DefaultFontFamily, 13f, FontStyle.Bold),
-                Bounds = new Rectangle(32, 190, 280, 60)
+                Bounds = new Rectangle(32, 210, 280, 56)
             };
             launchBtn.Click += (s, e) =>
             {
-                if (_versionCombo.SelectedItem is string v && !v.StartsWith("（"))
-                    _main.LaunchGame(v);
+                var sel = _versionPick?.SelectedItem;
+                if (sel != null && !sel.Title.StartsWith("（"))
+                {
+                    var id = sel.Tag as string;
+                    _main.LaunchGame(string.IsNullOrEmpty(id) ? sel.Title : id);
+                }
                 else
                 {
                     MessageBox.Show("还没装任何版本！点右边「去下载」挑一个。", "Easyer");
@@ -243,18 +245,32 @@ namespace EasyerLauncher.Pages
 
         private void LoadVersions()
         {
-            _versionCombo.Items.Clear();
+            var items = new System.Collections.Generic.List<CardPicker.Item>();
+
+            // 整合包实例优先展示（显示整合包名，Tag 存版本 id）
+            foreach (var inst in _main.Cfg.Instances)
+            {
+                if (!Directory.Exists(inst.Dir)) continue;
+                items.Add(new CardPicker.Item
+                {
+                    Title = inst.Name,
+                    Sub = (inst.GameVersion ?? "") + (string.IsNullOrEmpty(inst.Loader) ? "" : "  ·  " + inst.Loader),
+                    Badge = "整合包",
+                    Tag = inst.Id
+                });
+            }
+
             var list = GameInstaller.ListInstalledVersions(_main.Cfg.GameDirectory);
-            if (list.Count == 0)
+            foreach (var v in list)
             {
-                _versionCombo.Items.Add("（还没装任何版本，点「去下载」）");
-                _versionCombo.SelectedIndex = 0;
+                if (v.StartsWith("pack-", StringComparison.OrdinalIgnoreCase)) continue;  // 实例已单独展示
+                items.Add(new CardPicker.Item { Title = v, Sub = "标准版本", Tag = v });
             }
-            else
-            {
-                foreach (var v in list) _versionCombo.Items.Add(v);
-                _versionCombo.SelectedIndex = 0;
-            }
+
+            if (items.Count == 0)
+                items.Add(new CardPicker.Item { Title = "（还没装任何版本）", Sub = "点「去下载」挑一个", Tag = "" });
+
+            _versionPick.SetItems(items);
             var acc = _main.Cfg.GetActiveAccount();
             _accountLabel.Text = "当前账号：" + (acc == null
                 ? "（未设置，去「账号」页添加，离线账号秒建）"

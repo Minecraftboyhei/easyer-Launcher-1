@@ -13,6 +13,8 @@ Namespace Minecraft
         Public Class LaunchOptions
             Public Property VersionId As String
             Public Property GameDir As String
+            ''' <summary>versions / libraries / assets 的根目录。整合包实例用它指向全局游戏目录，GameDir 指向实例目录。</summary>
+            Public Property RootDir As String = ""
             Public Property JavaPath As String = "java"
             Public Property MaxMemoryMB As Integer = 4096
             Public Property MinMemoryMB As Integer = 512
@@ -27,17 +29,19 @@ Namespace Minecraft
 
         ''' <summary>构建 java 命令行参数（不含 java 可执行文件本身）。</summary>
         Public Shared Function BuildArguments(opt As LaunchOptions) As String
-            Dim versionsDir = Path.Combine(opt.GameDir, "versions")
+            ' 整合包实例：版本库/资源库在全局根目录，游戏存档与 mods 在实例目录
+            Dim root = If(String.IsNullOrEmpty(opt.RootDir), opt.GameDir, opt.RootDir)
+            Dim versionsDir = Path.Combine(root, "versions")
             Dim rv = VersionResolver.Resolve(opt.VersionId, versionsDir)
 
             ' 先确保文件齐全
-            GameInstaller.Install(opt.VersionId, opt.GameDir, Sub(s) System.Diagnostics.Debug.WriteLine(s))
+            GameInstaller.Install(opt.VersionId, root, Sub(s) System.Diagnostics.Debug.WriteLine(s))
 
             Dim acc = opt.Account
             If acc Is Nothing Then acc = New AccountInfo With {.Name = "Player", .Uuid = "00000000-0000-0000-0000-000000000000", .AccessToken = "0"}
 
-            Dim assetsDir = Path.Combine(opt.GameDir, "assets")
-            Dim libsDir = Path.Combine(opt.GameDir, "libraries")
+            Dim assetsDir = Path.Combine(root, "assets")
+            Dim libsDir = Path.Combine(root, "libraries")
             Dim nativesDir = rv.NativesDir
             If String.IsNullOrEmpty(nativesDir) Then nativesDir = Path.Combine(versionsDir, rv.Id, "natives")
 
@@ -89,7 +93,7 @@ Namespace Minecraft
 
             ' 日志配置
             If rv.LoggingArgument <> "" AndAlso rv.LoggingFilePath <> "" Then
-                Dim logPath = Path.Combine(opt.GameDir, rv.LoggingFilePath.Replace("/"c, Path.DirectorySeparatorChar))
+                Dim logPath = Path.Combine(root, rv.LoggingFilePath.Replace("/"c, Path.DirectorySeparatorChar))
                 If File.Exists(logPath) Then
                     args.Add(rv.LoggingArgument.Replace("${path}", logPath))
                 End If
@@ -149,7 +153,8 @@ Namespace Minecraft
             s = s.Replace("${launcher_name}", "EasyerLauncher")
             s = s.Replace("${launcher_version}", "1.0")
             s = s.Replace("${classpath}", classpath)
-            s = s.Replace("${library_directory}", Path.Combine(opt.GameDir, "libraries"))
+            Dim rootDir = If(String.IsNullOrEmpty(opt.RootDir), opt.GameDir, opt.RootDir)
+            s = s.Replace("${library_directory}", Path.Combine(rootDir, "libraries"))
             s = s.Replace("${classpath_separator}", ";")
             Return s
         End Function
