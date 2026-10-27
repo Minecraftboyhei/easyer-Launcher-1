@@ -16,12 +16,15 @@ Windows 11 / PCL2 风格的 Minecraft Java 版启动器，**下载解压双击�
 
 ### 关于微软正版登录
 登录用的 Azure 应用已经编进程序里，账号页点「浏览器登录」即可，不用自己注册应用。
-但 Mojang 自 2023 年起对第三方启动器实行 **Client ID 白名单**：自建应用必须先通过
-[Java Edition API 审核](https://aka.ms/mce-reviewappid)。本项目的应用已提交审核，
-**审核通过前，正版登录会在最后一步被 Mojang 拦下**（微软账号与 Xbox 认证本身都能通过）。
-审核结果出来后会在这里说明；期间请用离线 / LittleSkin 登录，游戏体验完全一致。
+**本应用的 Client ID 已通过 Mojang API 白名单审核，正版登录完整可用**，微软账号登录即玩。
+想用自建 Azure 应用？账号页点「高级 · 使用自建的应用」展开填写；留空即用内置。
 
 ### 已知说明
 - Forge / NeoForge 首次安装需下载官方安装器并用本机 Java 执行，较慢属正常
 - NeoForge 支持 1.20.1+（1.20.1 走老的 `net/neoforged/forge` 坐标）
 - 仅支持 Windows x64
+
+## v1.0.1 更新（2026-10-27）
+
+- 正版登录全面可用：应用已通过 Mojang API 审核
+- 账号页默认隐藏 Client ID，自建入口收进「高级」按钮
