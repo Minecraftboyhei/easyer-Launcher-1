@@ -174,11 +174,9 @@ namespace EasyerLauncher.Pages
             });
             _rightCard.Controls.Add(new Label
             {
-                Text = "已内置登录应用，账号页开箱即用。\n" +
-                       "注意：Mojang 对第三方启动器实行 API 白名单——\n" +
-                       "自建 Client ID 需到 aka.ms/mce-reviewappid 提交审核\n" +
-                       "（几天到几周）。审核没过之前，正版登录会在最后\n" +
-                       "一步被 Mojang 拦下；现在就能玩：LittleSkin 外置 / 离线登录。",
+                Text = "已内置登录应用，开箱即用——无需填写任何 ID。\n" +
+                       "本应用的 Client ID 已通过 Mojang API 白名单审核，\n" +
+                       "点下方按钮用微软账号登录即可。",
                 Font = Theme.SmallFont,
                 ForeColor = Theme.ForegroundDim,
                 BackColor = Color.Transparent,
@@ -189,12 +187,14 @@ namespace EasyerLauncher.Pages
             {
                 Bounds = new Rectangle(20, 322, 300, 30),
                 BorderStyle = BorderStyle.FixedSingle,
-                Text = _main.Cfg.MsClientId,
-                PlaceholderText = "Azure 应用 Client ID（GUID）"
+                // 内置 ID 不明文展示；只有用户自建了应用（配置值 ≠ 内置）才显示
+                Text = _main.Cfg.MsClientId == EasyerLauncher.Core.Auth.MicrosoftAuth.DefaultClientId ? "" : _main.Cfg.MsClientId,
+                PlaceholderText = "留空 = 使用内置登录应用",
+                Visible = false
             };
             _rightCard.Controls.Add(_clientId);
 
-            var azureBtn = new W11Button { Text = "去注册", Bounds = new Rectangle(330, 322, 94, 30) };
+            var azureBtn = new W11Button { Text = "去注册", Bounds = new Rectangle(330, 322, 94, 30), Visible = false };
             azureBtn.Click += (s, e) =>
             {
                 try
@@ -207,16 +207,27 @@ namespace EasyerLauncher.Pages
             };
             _rightCard.Controls.Add(azureBtn);
 
+            // 高级入口：默认收起，展开后才能看到/修改 Client ID
+            var advancedBtn = new W11Button { Text = "高级 · 使用自建的应用 →", ButtonKind = W11Button.Kind.Ghost, Bounds = new Rectangle(20, 322, 200, 30) };
+            advancedBtn.Click += (s, e) =>
+            {
+                advancedBtn.Visible = false;
+                _clientId.Visible = true;
+                azureBtn.Visible = true;
+            };
+            _rightCard.Controls.Add(advancedBtn);
+
             var msBtn = new W11Button { Text = "浏览器登录（推荐）", ButtonKind = W11Button.Kind.Accent, Bounds = new Rectangle(20, 364, 190, 40) };
             var dcBtn = new W11Button { Text = "设备码登录", ButtonKind = W11Button.Kind.Ghost, Bounds = new Rectangle(220, 366, 130, 38) };
             dcBtn.Click += (s, e) => _ = MicrosoftLogin();
             msBtn.Click += async (s, e) =>
             {
-                var clientId = _clientId.Text.Trim();
+                // 收起状态或留空 = 用内置应用；展开且填了值才用自建
+                var clientId = _clientId.Visible ? _clientId.Text.Trim() : "";
+                if (clientId.Length == 0) clientId = _main.Cfg.MsClientId;
                 if (!Guid.TryParse(clientId, out _))
                 {
-                    MessageBox.Show("先填一个有效的 Client ID（GUID）！\n" +
-                        "通常已经自动填好了，不要清空它。", "Easyer");
+                    MessageBox.Show("Client ID 需要是有效的 GUID；留空则使用内置登录应用。", "Easyer");
                     return;
                 }
                 _main.Cfg.MsClientId = clientId;
@@ -347,12 +358,8 @@ namespace EasyerLauncher.Pages
 
         private async Task MicrosoftLogin()
         {
-            var clientId = _clientId.Text.Trim();
-            if (clientId.Length == 0)
-            {
-                MessageBox.Show("先填入 Azure 应用的 Client ID（点右边「去注册」两分钟搞定）。", "Easyer");
-                return;
-            }
+            var clientId = _clientId.Visible ? _clientId.Text.Trim() : "";
+            if (clientId.Length == 0) clientId = _main.Cfg.MsClientId; // 留空 = 内置应用
             if (!Guid.TryParse(clientId, out _))
             {
                 MessageBox.Show("Client ID 格式不对——应该是一串 GUID，形如\n" +
