@@ -27,6 +27,19 @@ Namespace Minecraft
             Public Property AuthlibInjectorJar As String = ""   ' 外置登录：agent jar 路径
         End Class
 
+        ''' <summary>
+        ''' 参数值含空格时补双引号。路径里带空格（如 "easyer Launcher 1"）不引起来会被 JVM 拆成多个参数，
+        ''' 表现为主类被认成路径里的某一段（ClassNotFoundException: Launcher）。
+        ''' </summary>
+        Private Shared Function Q(token As String) As String
+            If String.IsNullOrEmpty(token) Then Return token
+            If token.Length >= 2 AndAlso token.StartsWith(""""c) AndAlso token.EndsWith(""""c) Then Return token
+            If token.Contains(" "c) OrElse token.Contains(ControlChars.Tab) Then
+                Return """" & token & """"
+            End If
+            Return token
+        End Function
+
         ''' <summary>构建 java 命令行参数（不含 java 可执行文件本身）。</summary>
         Public Shared Function BuildArguments(opt As LaunchOptions) As String
             ' 整合包实例：版本库/资源库在全局根目录，游戏存档与 mods 在实例目录
@@ -79,23 +92,24 @@ Namespace Minecraft
 
             ' 外置登录：挂 authlib-injector agent（必须在 -cp 之前）
             If Not String.IsNullOrEmpty(opt.AuthlibInjectorUrl) Then
-                args.Add("-javaagent:""" & opt.AuthlibInjectorJar & "=" & opt.AuthlibInjectorUrl & """")
+                args.Add(Q("-javaagent:" & opt.AuthlibInjectorJar & "=" & opt.AuthlibInjectorUrl))
             End If
 
             If rv.JvmArgs.Count > 0 Then
                 For Each token In rv.JvmArgs
-                    args.Add(Substitute(token, opt, rv, cp.ToString(), nativesDir, assetsDir))
+                    args.Add(Q(Substitute(token, opt, rv, cp.ToString(), nativesDir, assetsDir)))
                 Next
             Else
-                args.Add("-Djava.library.path=""" & nativesDir & """")
-                args.Add("-cp """ & cp.ToString() & """")
+                args.Add(Q("-Djava.library.path=" & nativesDir))
+                args.Add("-cp")
+                args.Add(Q(cp.ToString()))
             End If
 
             ' 日志配置
             If rv.LoggingArgument <> "" AndAlso rv.LoggingFilePath <> "" Then
                 Dim logPath = Path.Combine(root, rv.LoggingFilePath.Replace("/"c, Path.DirectorySeparatorChar))
                 If File.Exists(logPath) Then
-                    args.Add(rv.LoggingArgument.Replace("${path}", logPath))
+                    args.Add(Q(rv.LoggingArgument.Replace("${path}", logPath)))
                 End If
             End If
 
@@ -105,27 +119,33 @@ Namespace Minecraft
             If rv.MinecraftArguments <> "" Then
                 For Each token In rv.MinecraftArguments.Split(" "c)
                     If token.Trim() = "" Then Continue For
-                    args.Add(Substitute(token, opt, rv, cp.ToString(), nativesDir, assetsDir))
+                    args.Add(Q(Substitute(token, opt, rv, cp.ToString(), nativesDir, assetsDir)))
                 Next
             ElseIf rv.GameArgs.Count > 0 Then
                 For Each token In rv.GameArgs
-                    args.Add(Substitute(token, opt, rv, cp.ToString(), nativesDir, assetsDir))
+                    args.Add(Q(Substitute(token, opt, rv, cp.ToString(), nativesDir, assetsDir)))
                 Next
             Else
                 Throw New Exception("版本 JSON 中没有游戏参数")
             End If
 
-            ' 分辨率
+            ' 分辨率（值与开关分开成两个参数，否则 " 会把两者包成一个）
             If opt.FullScreen Then
                 args.Add("--fullscreen")
             Else
-                args.Add("--width " & opt.WindowWidth)
-                args.Add("--height " & opt.WindowHeight)
+                args.Add("--width")
+                args.Add(opt.WindowWidth.ToString())
+                args.Add("--height")
+                args.Add(opt.WindowHeight.ToString())
             End If
 
             If opt.ServerAddress <> "" Then
-                args.Add("--server " & opt.ServerAddress.Split(":"c)(0))
-                If opt.ServerAddress.Contains(":") Then args.Add("--port " & opt.ServerAddress.Split(":"c)(1))
+                args.Add("--server")
+                args.Add(opt.ServerAddress.Split(":"c)(0))
+                If opt.ServerAddress.Contains(":") Then
+                    args.Add("--port")
+                    args.Add(opt.ServerAddress.Split(":"c)(1))
+                End If
             End If
 
             Return String.Join(" ", args)
@@ -159,9 +179,8 @@ Namespace Minecraft
             Return s
         End Function
 
-        ''' <summary>启动游戏，返回进程。</summary>
+        ''' <summary>启动游戏。若进程几秒内秒退，自动重跑一次抓取错误输出并抛出可读原因。</summary>
         Public Shared Function Launch(opt As LaunchOptions) As Process
-            Dim workingDir As String = Nothing
             Dim args = BuildArguments(opt)
             Dim psi As New ProcessStartInfo With {
                 .FileName = opt.JavaPath,
@@ -172,7 +191,76 @@ Namespace Minecraft
                 .RedirectStandardOutput = False,
                 .RedirectStandardError = False
             }
-            Return Process.Start(psi)
+            Dim p = Process.Start(psi)
+
+            ' 3.5 秒内退出 = 没能起来（正常启动此时早就在加载资源了）
+            If p.WaitForExit(3500) Then
+                Dim diag = CaptureFailure(psi)
+                Dim hint As String = ""
+                If diag.Contains("ClassNotFoundException") OrElse diag.Contains("找不到或无法加载主类") Then
+                    hint = Environment.NewLine & "提示：路径里带空格或特殊字符会导致参数被拆开，建议把启动器和游戏目录换个不含空格的路径。"
+                ElseIf diag.Contains("UnsupportedClassVersionError") Then
+                    hint = Environment.NewLine & "提示：Java 版本太低，请换用新版 Java（21 及以上）。"
+                ElseIf diag.Contains("OutOfMemoryError") Then
+                    hint = Environment.NewLine & "提示：内存不足，去设置页把内存调小一点。"
+                End If
+                Throw New Exception("游戏进程启动后立即退出（退出码 " & p.ExitCode & "）。" & hint &
+                                    Environment.NewLine & Environment.NewLine & "Java 输出：" &
+                                    Environment.NewLine & diag)
+            End If
+            Return p
+        End Function
+
+        ''' <summary>重跑一次并捕获输出，用于把秒退原因翻出来（最多 12 秒）。</summary>
+        Private Shared Function CaptureFailure(psi As ProcessStartInfo) As String
+            Dim sb As New StringBuilder()
+            Try
+                Dim psi2 As New ProcessStartInfo With {
+                    .FileName = psi.FileName,
+                    .Arguments = psi.Arguments,
+                    .WorkingDirectory = psi.WorkingDirectory,
+                    .UseShellExecute = False,
+                    .CreateNoWindow = True,
+                    .RedirectStandardOutput = True,
+                    .RedirectStandardError = True
+                }
+                Dim onData As DataReceivedEventHandler =
+                    Sub(s, e)
+                        If e.Data IsNot Nothing Then
+                            SyncLock sb
+                                sb.AppendLine(e.Data)
+                            End SyncLock
+                        End If
+                    End Sub
+                Using p2 = Process.Start(psi2)
+                    AddHandler p2.OutputDataReceived, onData
+                    AddHandler p2.ErrorDataReceived, onData
+                    p2.BeginOutputReadLine()
+                    p2.BeginErrorReadLine()
+                    If Not p2.WaitForExit(12000) Then
+                        Try
+                            p2.Kill()
+                        Catch
+                        End Try
+                    End If
+                End Using
+            Catch ex As Exception
+                Return "（无法读取 Java 输出：" & ex.Message & "）"
+            End Try
+
+            Dim text As String
+            SyncLock sb
+                text = sb.ToString()
+            End SyncLock
+            If String.IsNullOrWhiteSpace(text) Then Return "（Java 没有输出任何内容，可能是 Java 路径不对）"
+            ' 只留下最后 30 行，避免弹窗过长
+            Dim arr = text.Split(New String() {vbCrLf, vbLf}, StringSplitOptions.RemoveEmptyEntries)
+            Dim from = Math.Max(0, arr.Length - 30)
+            Dim sbOut As New StringBuilder()
+            For i = from To arr.Length - 1
+                sbOut.AppendLine(arr(i))
+            Next
+            Return sbOut.ToString()
         End Function
 
     End Class
