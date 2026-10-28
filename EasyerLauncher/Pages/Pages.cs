@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -117,16 +118,16 @@ namespace EasyerLauncher.Pages
                         g.DrawPath(pen, path);
                 }
 
-                // 头像
-                var av = new Rectangle(rect.X + 10, rect.Y + 7, 40, 40);
+                // 头像：方形不裁圆、最近邻缩放（PCL 风格像素脸）
+                var av = new Rectangle(rect.X + 10, rect.Y + 5, 48, 48);
                 var img = Avatars.GetCached(acc) ?? Avatars.Steve();
-                using (var clip = Theme.RoundedPath(av, 8))
-                {
-                    var prev = g.Clip;
-                    g.SetClip(clip);
-                    g.DrawImage(img, av);
-                    g.Clip = prev;
-                }
+                var pm = g.InterpolationMode;
+                var po = g.PixelOffsetMode;
+                g.InterpolationMode = InterpolationMode.NearestNeighbor;
+                g.PixelOffsetMode = PixelOffsetMode.Half;
+                g.DrawImage(img, av);
+                g.InterpolationMode = pm;
+                g.PixelOffsetMode = po;
 
                 // 昵称
                 var nameRect = new Rectangle(av.Right + 12, rect.Y + 8, Math.Max(60, rect.Width - av.Right - 110), 22);

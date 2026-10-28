@@ -363,10 +363,13 @@ namespace EasyerLauncher
             using (var g = Graphics.FromImage(bmp))
             {
                 float u = size / 8f;
+                // 用整数边界铺格子：小尺寸（8x8）时也不能重叠或留缝
                 void Cell(int x, int y, Color c)
                 {
+                    int x0 = (int)Math.Round(x * u), x1 = (int)Math.Round((x + 1) * u);
+                    int y0 = (int)Math.Round(y * u), y1 = (int)Math.Round((y + 1) * u);
                     using var b = new SolidBrush(c);
-                    g.FillRectangle(b, x * u, y * u, u + 0.6f, u + 0.6f);
+                    g.FillRectangle(b, x0, y0, Math.Max(1, x1 - x0), Math.Max(1, y1 - y0));
                 }
                 var hair = Color.FromArgb(60, 40, 24);
                 var skin = Color.FromArgb(198, 138, 96);

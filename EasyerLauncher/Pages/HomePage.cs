@@ -47,14 +47,14 @@ namespace EasyerLauncher.Pages
         {
             if (_launchCard == null) return;
             int w = Math.Max(700, Width - 64);
-            _launchCard.Bounds = new Rectangle(32, 90, w, 300);
+            _launchCard.Bounds = new Rectangle(32, 90, w, 344);
             if (_taskRing != null) _taskRing.Bounds = new Rectangle(w - 260, 34, 228, 24);
-            if (_accountLabel != null) _accountLabel.Width = Math.Max(260, w - 120);
+            if (_accountLabel != null) _accountLabel.Width = Math.Max(260, w - 176);
             int gap = 16;
             int cw = (w - gap * 2) / 3;
             for (int i = 0; i < 3; i++)
-                _infoCards[i].Bounds = new Rectangle(32 + i * (cw + gap), 410, cw, 130);
-            _logCard.Bounds = new Rectangle(32, 560, w, Math.Max(120, Height - 590));
+                _infoCards[i].Bounds = new Rectangle(32 + i * (cw + gap), 452, cw, 130);
+            _logCard.Bounds = new Rectangle(32, 596, w, Math.Max(120, Height - 626));
             _logBox.Bounds = new Rectangle(16, 14, w - 32, _logCard.Height - 28);
         }
 
@@ -63,7 +63,7 @@ namespace EasyerLauncher.Pages
             Controls.Add(PageUtil.Title("主页"));
 
             // ===== 启动大卡 =====
-            _launchCard = new W11Card { Bounds = new Rectangle(32, 90, 976, 300) };
+            _launchCard = new W11Card { Bounds = new Rectangle(32, 90, 976, 344) };
 
             var banner = new Label
             {
@@ -103,7 +103,7 @@ namespace EasyerLauncher.Pages
             refreshBtn.Click += (s, e) => LoadVersions();
             _launchCard.Controls.Add(refreshBtn);
 
-            _avatar = new AvatarBox { Location = new Point(32, 170), Size = new Size(40, 40) };
+            _avatar = new AvatarBox { Location = new Point(32, 174), Size = new Size(72, 72) };
             _launchCard.Controls.Add(_avatar);
 
             // 定宽 + 省略号：昵称再长也不会压到下面的按钮
@@ -111,7 +111,7 @@ namespace EasyerLauncher.Pages
             {
                 BackColor = Color.Transparent,
                 Font = Theme.BodyFont,
-                Location = new Point(82, 180),
+                Location = new Point(120, 199),
                 AutoSize = false,
                 AutoEllipsis = true,
                 Size = new Size(440, 22)
@@ -124,7 +124,7 @@ namespace EasyerLauncher.Pages
                 IconGlyph = "play",
                 ButtonKind = W11Button.Kind.Accent,
                 Font = new Font(Theme.DefaultFontFamily, 13f, FontStyle.Bold),
-                Bounds = new Rectangle(32, 216, 280, 56)
+                Bounds = new Rectangle(32, 258, 280, 56)
             };
             launchBtn.Click += (s, e) =>
             {
@@ -147,7 +147,7 @@ namespace EasyerLauncher.Pages
                 Text = "去下载",
                 IconGlyph = "download",
                 ButtonKind = W11Button.Kind.Ghost,
-                Bounds = new Rectangle(328, 214, 150, 48)
+                Bounds = new Rectangle(328, 258, 150, 48)
             };
             dlBtn.Click += (s, e) => _main.Navigate("download");
             _launchCard.Controls.Add(dlBtn);
@@ -157,7 +157,7 @@ namespace EasyerLauncher.Pages
                 Text = "启动器设置",
                 IconGlyph = "settings",
                 ButtonKind = W11Button.Kind.Ghost,
-                Bounds = new Rectangle(492, 214, 150, 48)
+                Bounds = new Rectangle(492, 258, 150, 48)
             };
             serverBtn.Click += (s, e) => _main.Navigate("settings");
             _launchCard.Controls.Add(serverBtn);
@@ -180,7 +180,7 @@ namespace EasyerLauncher.Pages
             for (int i = 0; i < 3; i++)
             {
                 var def = cardDefs[i];
-                var card = new W11Card { Bounds = new Rectangle(ix, 410, 314, 130) };
+                var card = new W11Card { Bounds = new Rectangle(ix, 452, 314, 130) };
                 _infoCards[i] = card;
                 Controls.Add(card);
 

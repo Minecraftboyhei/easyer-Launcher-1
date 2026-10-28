@@ -31,4 +31,4 @@ shots9/
 dump_*.txt
 
 # 验收截图
-verify/
+verify*/
