@@ -1,0 +1,14 @@
+宣传片视频文件已移出仓库，存放位置：
+
+  D:\Backup\Videos\Easyer Launcher 宣传片\
+    EasyerLauncher-宣传片.mp4        成品（B 站 BV1Erxu64EDa 用的这版）
+    ai\Cinematic_product_promo_for_a__2026-10-27T13-10-07.mp4   AI 生成版 1
+    ai2\Smooth_cinematic_camera_motion_2026-10-27T13-23-31.mp4   AI 生成版 2
+    segs\s0~s7.mp4                   分段素材（ffmpeg 拼接用）
+
+本目录保留的是渲染脚本与帧图：
+    make_frames.py / render.py / render.cmd   生成帧 + 合成视频
+    frames\f1~f8_*.png                        各页面截图帧
+    shots\*.png                               截图原图
+
+重新出片：先跑 make_frames.py 生成帧，再跑 render.cmd 合成。
