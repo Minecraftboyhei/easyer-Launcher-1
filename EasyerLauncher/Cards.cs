@@ -17,6 +17,7 @@ namespace EasyerLauncher
             public string Title = "";
             public string Sub = "";
             public string Badge = "";     // 右上角小标签，如"推荐"
+            public string IconKind = "";  // 左侧徽标：vanilla/fabric/quilt/forge/neoforge/pack，空=不画
             public object Tag;
         }
 
@@ -123,17 +124,28 @@ namespace EasyerLauncher
                     using (var pen = new Pen(Selected ? Theme.Accent : Theme.Border)) g.DrawPath(pen, path);
                 }
 
+                // 左侧类型徽标（草方块 / 加载器 logo / 整合包）
+                int textLeft = 12;
+                if (!string.IsNullOrEmpty(_item.IconKind))
+                {
+                    int sz = Math.Min(28, Height - 14);
+                    var ir = new Rectangle(10, (Height - sz) / 2, sz, sz);
+                    Icons.DrawKind(g, _item.IconKind, ir);
+                    textLeft = ir.Right + 10;
+                }
+
                 bool hasSub = !string.IsNullOrEmpty(_item.Sub);
                 int textTop = hasSub ? 12 : (Height - 20) / 2;
+                int textW = Math.Max(20, Width - textLeft - 12);
                 TextRenderer.DrawText(g, _item.Title,
                     new Font(Theme.DefaultFontFamily, 10f, FontStyle.Bold),
-                    new Rectangle(12, textTop, Width - 24, 20),
+                    new Rectangle(textLeft, textTop, textW, 20),
                     Selected ? Theme.Accent : Theme.Foreground,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
                 if (hasSub)
                     TextRenderer.DrawText(g, _item.Sub, Theme.SmallFont,
-                        new Rectangle(12, textTop + 21, Width - 24, 17),
+                        new Rectangle(textLeft, textTop + 21, textW, 17),
                         Theme.ForegroundDim,
                         TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 

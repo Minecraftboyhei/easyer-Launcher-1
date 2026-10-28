@@ -53,7 +53,7 @@ namespace EasyerLauncher.Pages
             _nextBtn = new W11Button
             {
                 Text = "下一步",
-                IconGlyph = "\uE72A",
+                IconGlyph = "next",
                 ButtonKind = W11Button.Kind.Accent,
                 Font = new Font(Theme.DefaultFontFamily, 11f, FontStyle.Bold),
                 Bounds = new Rectangle(24, 330, 200, 46)
@@ -333,7 +333,7 @@ namespace EasyerLauncher.Pages
             var ok = new W11Button
             {
                 Text = "开始安装",
-                IconGlyph = "\uE73E",
+                IconGlyph = "install",
                 ButtonKind = W11Button.Kind.Accent,
                 Font = new Font(Theme.DefaultFontFamily, 11f, FontStyle.Bold),
                 Bounds = new Rectangle(24, 464, 200, 46)
@@ -373,15 +373,16 @@ namespace EasyerLauncher.Pages
 
         private static void Run(MainForm main, string gameId, string loaderKey, string loaderVersion)
         {
-            main.SetStatus("开始安装 " + gameId +
-                (loaderKey != null ? " + " + loaderKey + " " + loaderVersion : "") + " ...");
+            var label = gameId + (loaderKey != null ? " + " + loaderKey + " " + loaderVersion : "");
+            main.SetStatus("开始安装 " + label + " ...");
+            main.BeginTask("安装 " + label);
             Task.Run(() =>
             {
                 try
                 {
                     // 1) 原版（加载器安装依赖原版）
                     GameInstaller.Install(gameId, main.Cfg.GameDirectory,
-                        msg => main.SetStatus("[" + gameId + "] " + msg));
+                        msg => main.ReportProgress("[" + gameId + "] " + msg));
 
                     // 2) 加载器
                     if (loaderKey != null)
@@ -390,33 +391,34 @@ namespace EasyerLauncher.Pages
                         {
                             case "fabric":
                                 FabricInstaller.Install(FabricInstaller.LoaderKind.Fabric, gameId, loaderVersion,
-                                    main.Cfg.GameDirectory, msg => main.SetStatus("[Fabric] " + msg));
+                                    main.Cfg.GameDirectory, msg => main.ReportProgress("[Fabric] " + msg));
                                 break;
                             case "quilt":
                                 FabricInstaller.Install(FabricInstaller.LoaderKind.Quilt, gameId, loaderVersion,
-                                    main.Cfg.GameDirectory, msg => main.SetStatus("[Quilt] " + msg));
+                                    main.Cfg.GameDirectory, msg => main.ReportProgress("[Quilt] " + msg));
                                 break;
                             case "forge":
                                 ForgeInstaller.Install(gameId, loaderVersion, main.Cfg.GameDirectory,
-                                    main.Cfg.JavaPath, msg => main.SetStatus("[Forge] " + msg));
+                                    main.Cfg.JavaPath, msg => main.ReportProgress("[Forge] " + msg));
                                 break;
                             case "neoforge":
                                 NeoForgeInstaller.Install(gameId, loaderVersion, main.Cfg.GameDirectory,
-                                    main.Cfg.JavaPath, msg => main.SetStatus("[NeoForge] " + msg));
+                                    main.Cfg.JavaPath, msg => main.ReportProgress("[NeoForge] " + msg));
                                 break;
                         }
                     }
 
-                    main.SetStatus(gameId + (loaderKey != null ? " + " + loaderKey : "") + " 安装完成 ✓");
+                    main.SetStatus(label + " 安装完成 ✓");
                     main.RefreshHomeVersions();
+                    main.EndTask();
                     main.BeginInvoke(new Action(() =>
-                        MessageBox.Show(gameId + (loaderKey != null ? " + " + loaderKey + " " + loaderVersion : "") +
-                            " 安装完成！主页版本列表已刷新。", "Easyer",
+                        MessageBox.Show(label + " 安装完成！主页版本列表已刷新。", "Easyer",
                             MessageBoxButtons.OK, MessageBoxIcon.Information)));
                 }
                 catch (Exception ex)
                 {
                     main.SetStatus("安装失败：" + ex.Message);
+                    main.EndTask();
                     main.BeginInvoke(new Action(() =>
                         MessageBox.Show("安装失败：\n" + ex.Message, "Easyer",
                             MessageBoxButtons.OK, MessageBoxIcon.Error)));

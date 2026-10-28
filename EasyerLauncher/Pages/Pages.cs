@@ -27,11 +27,142 @@ namespace EasyerLauncher.Pages
         }
     }
 
+    /// <summary>账号列表（自绘：头像 + 昵称 + 类型 + 当前标记）。</summary>
+    internal class AccountList : Control
+    {
+        public const int RowH = 58;
+
+        private List<Core.Config.AccountInfo> _items = new();
+        private string _activeName = "";
+        private int _selected = -1;
+        private readonly System.Windows.Forms.Timer _t;
+
+        public event Action SelectionChanged;
+
+        public Core.Config.AccountInfo Selected =>
+            _selected >= 0 && _selected < _items.Count ? _items[_selected] : null;
+
+        public int SelectedIndex => _selected;
+
+        public AccountList()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw |
+                     ControlStyles.SupportsTransparentBackColor, true);
+            BackColor = Color.Transparent;
+            Height = RowH * 3;
+            // 头像是异步拉的，落地后补刷一次
+            _t = new System.Windows.Forms.Timer { Interval = 700 };
+            _t.Tick += (s, e) => { _t.Stop(); if (!IsDisposed) Invalidate(); };
+        }
+
+        public void SetAccounts(List<Core.Config.AccountInfo> items, string activeName)
+        {
+            _items = items ?? new List<Core.Config.AccountInfo>();
+            _activeName = activeName ?? "";
+            if (_selected >= _items.Count) _selected = _items.Count - 1;
+            if (_selected < 0 && _items.Count > 0) _selected = 0;
+            Invalidate();
+            _t.Stop();
+            _t.Start();
+        }
+
+        protected override void OnMouseClick(MouseEventArgs e)
+        {
+            base.OnMouseClick(e);
+            int row = e.Y / RowH;
+            if (row >= 0 && row < _items.Count)
+            {
+                _selected = row;
+                Invalidate();
+                SelectionChanged?.Invoke();
+            }
+        }
+
+        protected override void OnMouseDoubleClick(MouseEventArgs e)
+        {
+            base.OnMouseDoubleClick(e);
+            int row = e.Y / RowH;
+            if (row >= 0 && row < _items.Count) { _selected = row; Invalidate(); OnActivate?.Invoke(row); }
+        }
+
+        public event Action<int> OnActivate;
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.Clear(Theme.BackdropOf(this));
+
+            if (_items.Count == 0)
+            {
+                TextRenderer.DrawText(g, "还没有账号 — 右边加一个离线账号，10 秒就能开玩。",
+                    Theme.BodyFont, new Rectangle(12, 12, Math.Max(60, Width - 24), 24),
+                    Theme.ForegroundDim, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+                return;
+            }
+
+            for (int i = 0; i < _items.Count; i++)
+            {
+                var acc = _items[i];
+                var rect = new Rectangle(0, i * RowH + 3, Width - 1, RowH - 6);
+                bool sel = i == _selected;
+                bool active = string.Equals(acc.Name, _activeName, StringComparison.OrdinalIgnoreCase);
+
+                using (var path = Theme.RoundedPath(rect, 10))
+                {
+                    using (var b = new SolidBrush(sel ? Theme.Lerp(Theme.Card, Theme.Accent, 0.18f) : Theme.Card))
+                        g.FillPath(b, path);
+                    using (var pen = new Pen(active ? Theme.Accent : Theme.Border))
+                        g.DrawPath(pen, path);
+                }
+
+                // 头像
+                var av = new Rectangle(rect.X + 10, rect.Y + 7, 40, 40);
+                var img = Avatars.GetCached(acc) ?? Avatars.Steve();
+                using (var clip = Theme.RoundedPath(av, 8))
+                {
+                    var prev = g.Clip;
+                    g.SetClip(clip);
+                    g.DrawImage(img, av);
+                    g.Clip = prev;
+                }
+
+                // 昵称
+                var nameRect = new Rectangle(av.Right + 12, rect.Y + 8, Math.Max(60, rect.Width - av.Right - 110), 22);
+                TextRenderer.DrawText(g, acc.Name, new Font(Theme.DefaultFontFamily, 10.5f, FontStyle.Bold),
+                    nameRect, sel ? Theme.Accent : Theme.Foreground,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+                // 类型 / 认证服
+                string tag = acc.AccountType switch
+                {
+                    "microsoft" => "正版 · Microsoft",
+                    "littleskin" => "外置 · " + (string.IsNullOrEmpty(acc.AuthServer) ? "LittleSkin" : acc.AuthServer),
+                    _ => "离线"
+                };
+                TextRenderer.DrawText(g, tag, Theme.SmallFont,
+                    new Rectangle(av.Right + 12, rect.Y + 30, Math.Max(60, rect.Width - av.Right - 110), 18),
+                    Theme.ForegroundDim, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+                if (active)
+                {
+                    var badge = new Rectangle(rect.Right - 74, rect.Y + 16, 62, 22);
+                    using (var bp = Theme.RoundedPath(badge, 11))
+                    using (var bb = new SolidBrush(Color.FromArgb(46, Theme.Accent)))
+                        g.FillPath(bb, bp);
+                    TextRenderer.DrawText(g, "当前", Theme.SmallFont, badge, Theme.Accent,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                }
+            }
+        }
+    }
+
     // ================= 主页 =================
     public class AccountPage : Panel
     {
         private readonly MainForm _main;
-        private ListBox _list;
+        private AccountList _list;
         private TextBox _offlineName;
         private TextBox _clientId;
         private TextBox _extUser, _extPass;
@@ -71,37 +202,22 @@ namespace EasyerLauncher.Pages
             // 账号列表
             _leftCard = new W11Card { Bounds = new Rectangle(32, 90, 560, 360) };
             Controls.Add(_leftCard);
-            _list = new ListBox
-            {
-                BorderStyle = BorderStyle.None,
-                Font = Theme.BodyFont,
-                Bounds = new Rectangle(16, 16, 528, 220),
-                IntegralHeight = false,
-                BackColor = Theme.Input,
-                ForeColor = Theme.Foreground
-            };
+            _list = new AccountList { Bounds = new Rectangle(16, 16, 528, 220) };
+            _list.OnActivate += idx => UseSelected();
             _leftCard.Controls.Add(_list);
 
-            var useBtn = new W11Button { Text = "切换为当前账号", Bounds = new Rectangle(16, 250, 190, 38) };
-            useBtn.Click += (s, e) =>
-            {
-                if (_list.SelectedIndex < 0) return;
-                var a = _main.Cfg.Accounts[_list.SelectedIndex];
-                _main.Cfg.ActiveAccountName = a.Name;
-                _main.Cfg.Save();
-                _main.SetStatus("当前账号已切换为 " + a.Name);
-                RefreshList();
-            };
+            var useBtn = new W11Button { Text = "切换为当前账号", IconGlyph = "check", Bounds = new Rectangle(16, 250, 190, 38) };
+            useBtn.Click += (s, e) => UseSelected();
             _leftCard.Controls.Add(useBtn);
 
-            var delBtn = new W11Button { Text = "删除账号", Bounds = new Rectangle(216, 250, 130, 38) };
+            var delBtn = new W11Button { Text = "删除账号", IconGlyph = "trash", Bounds = new Rectangle(216, 250, 130, 38) };
             delBtn.Click += (s, e) =>
             {
-                if (_list.SelectedIndex < 0) return;
-                var a = _main.Cfg.Accounts[_list.SelectedIndex];
+                var a = _list.Selected;
+                if (a == null) return;
                 if (MessageBox.Show("删除账号 " + a.Name + "？", "确认", MessageBoxButtons.YesNo) == DialogResult.Yes)
                 {
-                    _main.Cfg.Accounts.RemoveAt(_list.SelectedIndex);
+                    _main.Cfg.Accounts.Remove(a);
                     if (_main.Cfg.ActiveAccountName == a.Name)
                         _main.Cfg.ActiveAccountName = _main.Cfg.Accounts.Count > 0 ? _main.Cfg.Accounts[0].Name : "";
                     _main.Cfg.Save();
@@ -348,12 +464,19 @@ namespace EasyerLauncher.Pages
             RefreshList();
         }
 
+        private void UseSelected()
+        {
+            var a = _list.Selected;
+            if (a == null) return;
+            _main.Cfg.ActiveAccountName = a.Name;
+            _main.Cfg.Save();
+            _main.SetStatus("当前账号已切换为 " + a.Name);
+            RefreshList();
+        }
+
         private void RefreshList()
         {
-            _list.Items.Clear();
-            foreach (var a in _main.Cfg.Accounts)
-                _list.Items.Add(a.Name + (a.Name == _main.Cfg.ActiveAccountName ? "   ← 当前" : "") +
-                                (a.AccountType == "microsoft" ? "   [正版]" : a.AccountType == "littleskin" ? "   [外置]" : "   [离线]"));
+            _list.SetAccounts(_main.Cfg.Accounts, _main.Cfg.ActiveAccountName);
         }
 
         private async Task MicrosoftLogin()
@@ -443,6 +566,7 @@ namespace EasyerLauncher.Pages
         {
             _main = main;
             Dock = DockStyle.Fill;
+            AutoScroll = true;          // 三张卡加起来比窗口高，不开滚动下面的卡片就永远摸不到
             _accentHex = main.Cfg.AccentColor;
             Build();
         }
@@ -532,12 +656,75 @@ namespace EasyerLauncher.Pages
             var saveBtn = new W11Button
             {
                 Text = "保存全部设置",
+                IconGlyph = "check",
                 ButtonKind = W11Button.Kind.Accent,
                 Bounds = new Rectangle(24, 260, 220, 44),
                 Font = new Font(Theme.DefaultFontFamily, 11f, FontStyle.Bold)
             };
             saveBtn.Click += (s, e) => SaveAll();
             card2.Controls.Add(saveBtn);
+
+            // ===== 更新与声明 =====
+            var card3 = new W11Card { Bounds = new Rectangle(x, 710, w1, 150) };
+            Controls.Add(card3);
+            card3.Controls.Add(Mk("更新与声明", 24, 20));
+            _autoUpdate = new CheckBox
+            {
+                Text = "启动时自动检查更新（GitHub Releases，不上传任何本地数据）",
+                Bounds = new Rectangle(24, 46, 520, 30),
+                Checked = cfg.AutoCheckUpdate,
+                BackColor = Color.Transparent,
+                ForeColor = Theme.Foreground
+            };
+            card3.Controls.Add(_autoUpdate);
+
+            var checkBtn = new W11Button { Text = "检查更新", IconGlyph = "refresh", Bounds = new Rectangle(24, 86, 150, 38) };
+            checkBtn.Click += (s, e) => _ = CheckUpdate();
+            card3.Controls.Add(checkBtn);
+
+            var aboutBtn = new W11Button { Text = "软件声明", IconGlyph = "info", Bounds = new Rectangle(188, 86, 150, 38) };
+            aboutBtn.Click += (s, e) => { using var d = new AboutDialog(false); d.ShowDialog(FindForm()); };
+            card3.Controls.Add(aboutBtn);
+
+            var verTip = new Label
+            {
+                Text = "当前版本 " + AppInfo.Display + "  ·  " + AppInfo.RepoUrl,
+                ForeColor = Theme.ForegroundDim,
+                Font = Theme.SmallFont,
+                BackColor = Color.Transparent,
+                AutoSize = true,
+                Location = new Point(356, 96)
+            };
+            card3.Controls.Add(verTip);
+        }
+
+        private CheckBox _autoUpdate;
+
+        private async System.Threading.Tasks.Task CheckUpdate()
+        {
+            _main.SetStatus("正在检查更新 ...");
+            _main.BeginTask("正在检查更新");
+            try
+            {
+                var rel = await Updater.CheckAsync();
+                _main.EndTask();
+                if (rel == null)
+                {
+                    _main.SetStatus("已经是最新版 " + AppInfo.Display);
+                    MessageBox.Show("当前已是最新版（" + AppInfo.Display + "）。", "Easyer",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                using var d = new UpdateDialog(rel);
+                d.ShowDialog(FindForm());
+            }
+            catch (Exception ex)
+            {
+                _main.EndTask();
+                _main.SetStatus("检查更新失败：" + ex.Message);
+                MessageBox.Show("检查更新失败：\n" + ex.Message + "\n\n可以直接去 GitHub Releases 看：\n" + AppInfo.ReleasesUrl,
+                    "Easyer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private TextBox HexBox(Control parent, string label, string value, int x, int y)
@@ -605,6 +792,7 @@ namespace EasyerLauncher.Pages
             cfg.CustomBackground = _customBg.Text;
             cfg.CustomCard = _customCard.Text;
             cfg.CustomForeground = _customFg.Text;
+            cfg.AutoCheckUpdate = _autoUpdate != null && _autoUpdate.Checked;
             cfg.Save();
             ApplyThemeNow();
             _main.SetStatus("设置已保存 ✓");

@@ -19,3 +19,13 @@ dist/
 *.zip
 .minecraft/
 easyer-config.json
+
+# 截图与诊断产物
+shots3/
+shots4/
+shots5/
+shots6/
+shots7/
+shots8/
+shots9/
+dump_*.txt

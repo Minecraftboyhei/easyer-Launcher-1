@@ -88,6 +88,19 @@ namespace EasyerLauncher
                 }
             }
 
+            if (args.Length > 0 && args[0] == "--dump" && args.Length > 2)
+            {
+                // 诊断：打开窗口 → 切到指定页面 → 把控件树写到文件（排查页面空白）
+                var form = new MainForm();
+                form.Show();
+                form.Navigate(args[1]);
+                form.Update();
+                Application.DoEvents();
+                System.IO.File.WriteAllText(args[2], form.DumpPageTree());
+                Application.Exit();
+                return;
+            }
+
             if (args.Length > 0 && args[0] == "--selftest")
             {
                 // 无头自检：构造全部弹窗（原崩溃点：Theme.ApplyTo 碰到不支持透明的控件）

@@ -33,6 +33,11 @@ Namespace Config
         ' ==== 正版登录（需自建 Azure 应用后填入 ClientId）====
         Public Property MsClientId As String = ""
 
+        ' ==== 更新与声明 ====
+        Public Property AutoCheckUpdate As Boolean = True      ' 启动后台静默检查更新
+        Public Property LastUpdateCheck As String = ""         ' 上次检查时间（只作记录）
+        Public Property AgreementVersion As Integer = 0        ' 已读过的软件声明版本（0 = 还没弹过）
+
         Public Shared Function DefaultPath() As String
             Return Path.Combine(AppContext.BaseDirectory, "easyer-config.json")
         End Function

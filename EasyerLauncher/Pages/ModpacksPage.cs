@@ -50,7 +50,7 @@ namespace EasyerLauncher.Pages
             var btn = new W11Button
             {
                 Text = "搜索",
-                IconGlyph = "\uE721",
+                IconGlyph = "search",
                 ButtonKind = W11Button.Kind.Accent,
                 Bounds = new Rectangle(424, 89, 96, 33)
             };
@@ -91,6 +91,7 @@ namespace EasyerLauncher.Pages
         {
             int gen = ++_searchGen;
             _main.SetStatus("搜索整合包中 ...");
+            _main.BeginTask("搜索整合包中 ...");
             _flow.Controls.Clear();
             _hint.Text = "";
 
@@ -121,11 +122,13 @@ namespace EasyerLauncher.Pages
                     card.LoadIcon(null);
                 }
                 _flow.ResumeLayout(true);
+                _main.EndTask();
                 _main.SetStatus("整合包搜索完成");
             }
             catch (Exception ex)
             {
                 if (gen != _searchGen || IsDisposed) return;
+                _main.EndTask();
                 _main.SetStatus("搜索失败：" + ex.Message);
                 _flow.Controls.Add(new Label
                 {
@@ -236,7 +239,7 @@ namespace EasyerLauncher.Pages
             var install = new W11Button
             {
                 Text = "安装整合包",
-                IconGlyph = "\uE896",
+                IconGlyph = "download",
                 ButtonKind = W11Button.Kind.Accent,
                 Font = new Font(Theme.DefaultFontFamily, 11f, FontStyle.Bold),
                 Bounds = new Rectangle(24, 468, 200, 44)
@@ -273,12 +276,13 @@ namespace EasyerLauncher.Pages
             if (f == null) return;
 
             _main.SetStatus("开始安装整合包 " + _project.Title + " ...");
+            _main.BeginTask("安装整合包 " + _project.Title);
             Task.Run(() =>
             {
                 try
                 {
                     var instId = MrpackInstaller.Install(f.Url, _project.Slug, _main.Cfg.GameDirectory,
-                        _main.Cfg.JavaPath, msg => _main.SetStatus("[整合包] " + msg));
+                        _main.Cfg.JavaPath, msg => _main.ReportProgress("[整合包] " + msg));
 
                     var instDir = System.IO.Path.Combine(_main.Cfg.GameDirectory, "instances", instId);
                     var existing = _main.Cfg.Instances.Find(i =>
@@ -300,6 +304,7 @@ namespace EasyerLauncher.Pages
                     _main.RefreshHomeVersions();
 
                     _main.SetStatus("整合包安装完成：" + _project.Title + " ✓");
+                    _main.EndTask();
                     BeginInvoke(new Action(() =>
                     {
                         MessageBox.Show(
@@ -312,6 +317,7 @@ namespace EasyerLauncher.Pages
                 }
                 catch (Exception ex)
                 {
+                    _main.EndTask();
                     _main.SetStatus("整合包安装失败：" + ex.Message);
                     BeginInvoke(new Action(() =>
                         MessageBox.Show("安装失败：\n" + ex.Message, "Easyer",

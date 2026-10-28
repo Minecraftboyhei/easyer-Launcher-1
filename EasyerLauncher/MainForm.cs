@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using EasyerLauncher.Core.Config;
 
@@ -17,15 +18,20 @@ namespace EasyerLauncher
         public Dictionary<string, Control> Pages = new();
         public string CurrentPage = "";
 
+        private ProgressRing _ring;
+        private Label _updateHint;
+        private Label _verLabel;
+        private Updater.ReleaseInfo _pendingUpdate;
+
         private static readonly (string Key, string Title, string Icon)[] Nav =
         {
-            ("home",     "主页",       "\uE80F"),  // Home
-            ("download", "下载",       "\uE896"),  // Download
-            ("loaders",  "加载器",     "\uE90F"),  // Repair
-            ("mods",     "模组 / 资源", "\uEA86"),  // Puzzle
-            ("packs",    "整合包",      "\uE7B8"),  // Package
-            ("account",  "账号",       "\uE77B"),  // Contact
-            ("settings", "设置",       "\uE713"),  // Setting s
+            ("home",     "主页",       "home"),
+            ("download", "下载",       "download"),
+            ("loaders",  "加载器",     "wrench"),
+            ("mods",     "模组 / 资源", "puzzle"),
+            ("packs",    "整合包",      "package"),
+            ("account",  "账号",       "user"),
+            ("settings", "设置",       "settings"),
         };
 
         public MainForm()
@@ -35,11 +41,14 @@ namespace EasyerLauncher
             Cfg.GameDirectory = LauncherConfig.EnsureGameDirectory(Cfg);
             try { Cfg.Save(); } catch { }
 
-            Text = "Easyer Launcher 1";
+            Text = AppInfo.AppName + "  " + AppInfo.Display;
             StartPosition = FormStartPosition.CenterScreen;
             Size = new Size(1240, 780);
             MinimumSize = new Size(1024, 660);
             Font = Theme.BodyFont;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            DoubleBuffered = true;
 
             BuildUi();
             Theme.Changed += () =>
@@ -62,8 +71,63 @@ namespace EasyerLauncher
                 int shotIdx = Array.IndexOf(args, "--shots");
                 if (shotIdx >= 0 && shotIdx + 1 < args.Length)
                     _ = SelfShots(args[shotIdx + 1]);
+                else
+                    StartBackgroundChecks();
             };
             Navigate("home");
+        }
+
+        private void StartBackgroundChecks()
+        {
+            // 首次运行弹一次软件声明
+            if (Cfg.AgreementVersion < 1)
+            {
+                try
+                {
+                    using var dlg = new AboutDialog(true);
+                    dlg.ShowDialog(this);
+                    Cfg.AgreementVersion = 1;
+                    Cfg.Save();
+                }
+                catch { }
+            }
+
+            // 后台静默检查更新
+            if (!Cfg.AutoCheckUpdate) return;
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var rel = await Updater.CheckAsync();
+                    if (rel == null) return;
+                    _pendingUpdate = rel;
+                    BeginInvoke(new Action(() =>
+                    {
+                        _updateHint.Text = "发现新版本 " + rel.Version + " · 点此更新";
+                        _updateHint.Visible = true;
+                        SetStatus("有新版本可用：" + rel.Version + "（当前 " + AppInfo.Display + "）");
+                    }));
+                }
+                catch { }
+            });
+        }
+
+        /// <summary>诊断：把当前页面的控件树（类型 / 位置 / 可见性）写成文本，用于排查"页面空白"。</summary>
+        public string DumpPageTree()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("Form=" + Size + " Content.ClientSize=" + Content.ClientSize);
+            if (_pageHost != null)
+                sb.AppendLine("pageHost=" + _pageHost.Bounds + " visible=" + _pageHost.Visible);
+            void Walk(Control c, int depth)
+            {
+                var pad = new string(' ', depth * 2);
+                sb.AppendLine(pad + c.GetType().Name + " '" + (c.Text ?? "").Replace("\r", "").Replace("\n", "") +
+                    "' b=" + c.Bounds + " vis=" + c.Visible + " dock=" + c.Dock);
+                foreach (Control child in c.Controls) Walk(child, depth + 1);
+            }
+            if (_pageHost != null) Walk(_pageHost, 0);
+            return sb.ToString();
         }
 
         /// <summary>自拍模式：遍历主要页面各截一张，然后退出。</summary>
@@ -72,7 +136,7 @@ namespace EasyerLauncher
             try
             {
                 System.IO.Directory.CreateDirectory(dir);
-                foreach (var key in new[] { "account", "home", "download", "mods", "packs", "loaders" })
+                foreach (var key in new[] { "account", "home", "download", "mods", "packs", "loaders", "settings" })
                 {
                     Navigate(key);
                     await System.Threading.Tasks.Task.Delay(key == "mods" || key == "download" ? 4500 : 2000);
@@ -133,21 +197,36 @@ namespace EasyerLauncher
                 y += 48;
             }
 
-            // 版本号
-            var ver = new Label
+            // 关于 / 声明
+            var aboutBtn = new W11Button
             {
-                Text = "v1.0 · C#/VB.NET",
+                Text = "关于与声明",
+                IconGlyph = "info",
+                ButtonKind = W11Button.Kind.Ghost,
+                Font = Theme.SmallFont,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
+                Bounds = new Rectangle(14, 636, 200, 36),
+                MyTextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(14, 0, 0, 0)
+            };
+            aboutBtn.Click += (s, e) => { using var d = new AboutDialog(false); d.ShowDialog(this); };
+            Sidebar.Controls.Add(aboutBtn);
+
+            // 版本号（程序集版本，1.X.X）
+            _verLabel = new Label
+            {
+                Text = AppInfo.Display + " · C# / VB.NET",
                 Font = Theme.SmallFont,
                 ForeColor = Theme.ForegroundDim,
                 BackColor = Color.Transparent,
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
-                Location = new Point(24, 700),
+                Location = new Point(24, 684),
                 AutoSize = true
             };
-            Sidebar.Controls.Add(ver);
+            Sidebar.Controls.Add(_verLabel);
 
-            // ===== 内容区 =====
-            Content = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+            // ===== 内容区（页面自己带滚动，外层不再 AutoScroll，省掉一次布局抖动）=====
+            Content = new Panel { Dock = DockStyle.Fill, AutoScroll = false };
             Controls.Add(Content);
 
             // ===== 状态栏 =====
@@ -160,10 +239,31 @@ namespace EasyerLauncher
                 ForeColor = Theme.ForegroundDim,
                 Padding = new Padding(10, 0, 0, 0)
             };
+            _ring = new ProgressRing { Dock = DockStyle.Right, Width = 220, Visible = false };
+            _updateHint = new Label
+            {
+                Dock = DockStyle.Right,
+                Width = 0,
+                TextAlign = ContentAlignment.MiddleRight,
+                Font = Theme.SmallFont,
+                ForeColor = Color.FromArgb(52, 211, 153),
+                Cursor = Cursors.Hand,
+                Visible = false
+            };
+            _updateHint.Click += (s, e) =>
+            {
+                if (_pendingUpdate == null) return;
+                using var d = new UpdateDialog(_pendingUpdate);
+                d.ShowDialog(this);
+            };
             statusPanel.Controls.Add(StatusLabel);
+            statusPanel.Controls.Add(_ring);
+            statusPanel.Controls.Add(_updateHint);
+            statusPanel.Controls.SetChildIndex(_updateHint, 0);
+            statusPanel.Controls.SetChildIndex(_ring, 1);
+            statusPanel.Controls.SetChildIndex(StatusLabel, 2);
             Controls.Add(statusPanel);
 
-            // Dock 顺序：Bottom 先加会被 Fill 覆盖，调整一下
             Controls.SetChildIndex(Content, 0);
             Controls.SetChildIndex(Sidebar, 1);
             Controls.SetChildIndex(statusPanel, 0);
@@ -175,6 +275,50 @@ namespace EasyerLauncher
                 StatusLabel.BeginInvoke(new Action(() => StatusLabel.Text = msg));
             else
                 StatusLabel.Text = msg;
+        }
+
+        // ================= 后台任务指示 =================
+
+        /// <summary>任务状态变化：caption / 进度(-1=不确定) / 是否进行中。</summary>
+        public event Action<string, float, bool> TaskState;
+
+        public void BeginTask(string caption)
+        {
+            if (InvokeRequired) { BeginInvoke(new Action(() => BeginTask(caption))); return; }
+            _ring.Start(caption, -1f);
+            TaskState?.Invoke(caption, -1f, true);
+        }
+
+        public void UpdateTask(float pct, string caption = null)
+        {
+            if (InvokeRequired) { BeginInvoke(new Action(() => UpdateTask(pct, caption))); return; }
+            _ring.Set(pct, caption);
+            TaskState?.Invoke(caption, pct, true);
+        }
+
+        public void EndTask()
+        {
+            if (InvokeRequired) { BeginInvoke(new Action(EndTask)); return; }
+            _ring.Stop();
+            TaskState?.Invoke("", 0f, false);
+        }
+
+        /// <summary>从进度消息里抠出 (3/120) 之类的数字，转成百分比喂给进度环。</summary>
+        public void ReportProgress(string msg)
+        {
+            SetStatus(msg);
+            var m = Regex.Match(msg ?? "", @"(\d+)\s*/\s*(\d+)");
+            if (m.Success && int.TryParse(m.Groups[2].Value, out var total) && total > 0 &&
+                int.TryParse(m.Groups[1].Value, out var cur))
+            {
+                UpdateTask(Math.Min(1f, cur / (float)total), msg);
+            }
+            else
+            {
+                var pm = Regex.Match(msg ?? "", @"(\d+(?:\.\d+)?)\s*%");
+                if (pm.Success && float.TryParse(pm.Groups[1].Value, out var p))
+                    UpdateTask(Math.Min(1f, p / 100f), msg);
+            }
         }
 
         /// <summary>加载器装好后刷新主页版本列表（丢弃缓存的主页，下次导航重建）。</summary>
@@ -194,6 +338,8 @@ namespace EasyerLauncher
                 _pageHost = null;
             }
             _navAnim?.Stop();
+            _navAnim?.Dispose();
+            _navAnim = null;
 
             if (!Pages.ContainsKey(key))
             {
@@ -213,11 +359,19 @@ namespace EasyerLauncher
 
             var p = Pages[key];
             p.Dock = DockStyle.Fill;
-            _pageHost = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background, Padding = new Padding(0, 34, 0, 0) };
+            // 固定尺寸的 host：动画只改 Top，不改 Size —— 子页面因此不会被反复重排（卡顿根因）
+            _pageHost = new Panel
+            {
+                Bounds = new Rectangle(0, kPageSlide, Content.ClientSize.Width, Content.ClientSize.Height),
+                Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom,
+                BackColor = Theme.Background
+            };
+            _pageHost.SuspendLayout();
             _pageHost.Controls.Add(p);
             Content.Controls.Add(_pageHost);
             Theme.ApplyTo(p);
-            p.Invalidate();
+            // 必须用 true：SkipLayout(false) 会让页面的 Dock.Fill 永远不生效，页面卡在 200x100
+            _pageHost.ResumeLayout(true);
             AnimatePageIn(_pageHost);
 
             for (int i = 0; i < NavButtons.Length; i++)
@@ -225,25 +379,37 @@ namespace EasyerLauncher
             foreach (var b in NavButtons) b.Invalidate();
         }
 
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            if (_pageHost != null && _navAnim == null)
+                _pageHost.Bounds = new Rectangle(0, 0, Content.ClientSize.Width, Content.ClientSize.Height);
+        }
+
+        private const int kPageSlide = 26;
         private System.Windows.Forms.Timer _navAnim;
         private Panel _pageHost;
 
-        /// <summary>页面滑入动画（ease-out，约 170ms）。</summary>
+        /// <summary>页面滑入动画（ease-out，约 170ms；只动 Top，不触发子布局）。</summary>
         private void AnimatePageIn(Panel host)
         {
-            const int startY = 34;
-            const int frames = 12;
+            const int frames = 10;
             int frame = 0;
-            _navAnim?.Dispose();
-            _navAnim = new System.Windows.Forms.Timer { Interval = 14 };
+            _navAnim = new System.Windows.Forms.Timer { Interval = 16 };
             _navAnim.Tick += (s, e) =>
             {
-                if (host.IsDisposed) { _navAnim.Stop(); _navAnim.Dispose(); return; }
+                if (host.IsDisposed) { _navAnim.Stop(); _navAnim.Dispose(); _navAnim = null; return; }
                 frame++;
-                float p = Math.Min(1f, frame / (float)frames);
-                float ease = 1f - (1f - p) * (1f - p);   // ease-out quad
-                host.Padding = new Padding(0, (int)Math.Round(startY * (1f - ease)), 0, 0);
-                if (p >= 1f) { _navAnim.Stop(); _navAnim.Dispose(); }
+                float t = Math.Min(1f, frame / (float)frames);
+                float ease = 1f - (1f - t) * (1f - t);   // ease-out quad
+                host.Top = (int)Math.Round(kPageSlide * (1f - ease));
+                if (t >= 1f)
+                {
+                    host.Top = 0;
+                    _navAnim.Stop();
+                    _navAnim.Dispose();
+                    _navAnim = null;
+                }
             };
             _navAnim.Start();
         }
@@ -260,6 +426,7 @@ namespace EasyerLauncher
                 return;
             }
 
+            BeginTask("正在准备启动 " + versionId + " ...");
             SetStatus("正在准备启动 " + versionId + " ...");
             try
             {
@@ -311,12 +478,13 @@ namespace EasyerLauncher
                 string injectorUrl = null, injectorJar = null;
                 if (acc.AccountType == "littleskin")
                 {
-                    SetStatus("准备外置登录组件 ...");
+                    UpdateTask(-1f, "准备外置登录组件 ...");
                     injectorUrl = Core.Auth.ExternalAuth.AuthRoot;
                     injectorJar = await System.Threading.Tasks.Task.Run(
                         () => Core.Auth.ExternalAuth.EnsureInjectorJar(Cfg.GameDirectory));
                 }
 
+                UpdateTask(-1f, "正在启动 " + versionId + " ...");
                 await System.Threading.Tasks.Task.Run(() =>
                 {
                     // 整合包实例：版本库共用全局目录，gameDir 指向实例目录（mods/存档隔离）
@@ -349,6 +517,10 @@ namespace EasyerLauncher
             {
                 SetStatus("启动失败：" + ex.Message);
                 MessageBox.Show("启动失败：\n" + ex.Message, "Easyer", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                EndTask();
             }
         }
     }

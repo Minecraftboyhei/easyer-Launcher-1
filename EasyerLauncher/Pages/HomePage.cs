@@ -14,12 +14,23 @@ namespace EasyerLauncher.Pages
         private readonly MainForm _main;
         private CardPicker _versionPick;
         private Label _accountLabel;
+        private AvatarBox _avatar;
+        private ProgressRing _taskRing;
 
         public HomePage(MainForm main)
         {
             _main = main;
             Dock = DockStyle.Fill;
             Build();
+            _main.TaskState += OnTaskState;
+            Disposed += (s, e) => _main.TaskState -= OnTaskState;
+        }
+
+        private void OnTaskState(string caption, float pct, bool running)
+        {
+            if (_taskRing == null || _taskRing.IsDisposed) return;
+            if (running) _taskRing.Start(caption, pct);
+            else _taskRing.Stop();
         }
 
         private W11Card _launchCard, _logCard;
@@ -37,6 +48,8 @@ namespace EasyerLauncher.Pages
             if (_launchCard == null) return;
             int w = Math.Max(700, Width - 64);
             _launchCard.Bounds = new Rectangle(32, 90, w, 300);
+            if (_taskRing != null) _taskRing.Bounds = new Rectangle(w - 260, 34, 228, 24);
+            if (_accountLabel != null) _accountLabel.Width = Math.Max(260, w - 120);
             int gap = 16;
             int cw = (w - gap * 2) / 3;
             for (int i = 0; i < 3; i++)
@@ -63,6 +76,9 @@ namespace EasyerLauncher.Pages
             };
             _launchCard.Controls.Add(banner);
 
+            _taskRing = new ProgressRing { Bounds = new Rectangle(716, 34, 228, 24), Visible = false };
+            _launchCard.Controls.Add(_taskRing);
+
             _launchCard.Controls.Add(new Label
             {
                 Text = "游戏版本",
@@ -81,28 +97,34 @@ namespace EasyerLauncher.Pages
             var refreshBtn = new W11Button
             {
                 Text = "刷新",
-                IconGlyph = "\uE72C",  // Refresh
+                IconGlyph = "refresh",
                 Bounds = new Rectangle(748, 116, 96, 36)
             };
             refreshBtn.Click += (s, e) => LoadVersions();
             _launchCard.Controls.Add(refreshBtn);
 
+            _avatar = new AvatarBox { Location = new Point(32, 170), Size = new Size(40, 40) };
+            _launchCard.Controls.Add(_avatar);
+
+            // 定宽 + 省略号：昵称再长也不会压到下面的按钮
             _accountLabel = new Label
             {
                 BackColor = Color.Transparent,
                 Font = Theme.BodyFont,
-                Location = new Point(32, 178),
-                AutoSize = true
+                Location = new Point(82, 180),
+                AutoSize = false,
+                AutoEllipsis = true,
+                Size = new Size(440, 22)
             };
             _launchCard.Controls.Add(_accountLabel);
 
             var launchBtn = new W11Button
             {
                 Text = "启动游戏",
-                IconGlyph = "\uE768",  // Play
+                IconGlyph = "play",
                 ButtonKind = W11Button.Kind.Accent,
                 Font = new Font(Theme.DefaultFontFamily, 13f, FontStyle.Bold),
-                Bounds = new Rectangle(32, 210, 280, 56)
+                Bounds = new Rectangle(32, 216, 280, 56)
             };
             launchBtn.Click += (s, e) =>
             {
@@ -123,9 +145,9 @@ namespace EasyerLauncher.Pages
             var dlBtn = new W11Button
             {
                 Text = "去下载",
-                IconGlyph = "\uE896",
+                IconGlyph = "download",
                 ButtonKind = W11Button.Kind.Ghost,
-                Bounds = new Rectangle(328, 196, 150, 48)
+                Bounds = new Rectangle(328, 214, 150, 48)
             };
             dlBtn.Click += (s, e) => _main.Navigate("download");
             _launchCard.Controls.Add(dlBtn);
@@ -133,8 +155,9 @@ namespace EasyerLauncher.Pages
             var serverBtn = new W11Button
             {
                 Text = "启动器设置",
+                IconGlyph = "settings",
                 ButtonKind = W11Button.Kind.Ghost,
-                Bounds = new Rectangle(492, 196, 150, 48)
+                Bounds = new Rectangle(492, 214, 150, 48)
             };
             serverBtn.Click += (s, e) => _main.Navigate("settings");
             _launchCard.Controls.Add(serverBtn);
@@ -145,11 +168,11 @@ namespace EasyerLauncher.Pages
             string[] infos = InfoLines();
             var cardDefs = new (string Title, string Value, string Glyph, string Btn, Action Click)[]
             {
-                ("游戏目录", Truncate(infos[0], 40), "\uE8B7", "打开目录",
+                ("游戏目录", Truncate(infos[0], 40), "folder", "打开目录",
                     () => { try { System.Diagnostics.Process.Start("explorer.exe", _main.Cfg.GameDirectory); } catch { } }),
-                ("Java 环境", infos[1], "\uE943", "检测详情",
+                ("Java 环境", infos[1], "shield", "检测详情",
                     () => _main.Navigate("settings")),
-                ("内存分配", infos[2], "\uE950", "调整",
+                ("内存分配", infos[2], "memory", "调整",
                     () => _main.Navigate("settings")),
             };
             _infoCards = new W11Card[3];
@@ -161,16 +184,12 @@ namespace EasyerLauncher.Pages
                 _infoCards[i] = card;
                 Controls.Add(card);
 
-                var icon = new Label
+                card.Controls.Add(new IconBox
                 {
-                    Text = def.Glyph,
-                    Font = Theme.BigIconFont,
-                    ForeColor = Theme.Accent,
-                    BackColor = Color.Transparent,
-                    Location = new Point(22, 18),
-                    AutoSize = true
-                };
-                card.Controls.Add(icon);
+                    IconName = def.Glyph,
+                    Location = new Point(20, 16),
+                    Size = new Size(32, 32)
+                });
                 card.Controls.Add(new Label
                 {
                     Text = def.Title,
@@ -256,6 +275,7 @@ namespace EasyerLauncher.Pages
                     Title = inst.Name,
                     Sub = (inst.GameVersion ?? "") + (string.IsNullOrEmpty(inst.Loader) ? "" : "  ·  " + inst.Loader),
                     Badge = "整合包",
+                    IconKind = "pack",
                     Tag = inst.Id
                 });
             }
@@ -264,7 +284,7 @@ namespace EasyerLauncher.Pages
             foreach (var v in list)
             {
                 if (v.StartsWith("pack-", StringComparison.OrdinalIgnoreCase)) continue;  // 实例已单独展示
-                items.Add(new CardPicker.Item { Title = v, Sub = "标准版本", Tag = v });
+                items.Add(new CardPicker.Item { Title = v, Sub = "标准版本", IconKind = "vanilla", Tag = v });
             }
 
             if (items.Count == 0)
@@ -272,9 +292,11 @@ namespace EasyerLauncher.Pages
 
             _versionPick.SetItems(items);
             var acc = _main.Cfg.GetActiveAccount();
+            _avatar.Bind(acc);
             _accountLabel.Text = "当前账号：" + (acc == null
                 ? "（未设置，去「账号」页添加，离线账号秒建）"
-                : acc.Name + (acc.AccountType == "microsoft" ? "  [正版]" : "  [离线]"));
+                : acc.Name + (acc.AccountType == "microsoft" ? "  [正版]"
+                            : acc.AccountType == "littleskin" ? "  [外置]" : "  [离线]"));
             _accountLabel.ForeColor = acc == null ? Theme.ForegroundDim : Theme.Foreground;
         }
 

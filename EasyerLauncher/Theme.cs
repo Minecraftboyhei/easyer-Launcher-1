@@ -221,7 +221,7 @@ namespace EasyerLauncher
 
             private void Step(object s, EventArgs e)
             {
-                Value += (_target - Value) * 0.22f;
+                Value += (_target - Value) * 0.32f;
                 if (Math.Abs(_target - Value) < 0.02f)
                 {
                     Value = _target;
@@ -344,40 +344,39 @@ namespace EasyerLauncher
                     _ => TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
                 } | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
 
-                int iconW = 0;
-                if (!string.IsNullOrEmpty(IconGlyph))
+                // 图标一律走自绘矢量图（Icons），不再依赖 Segoe MDL2 字形码位
+                int iconPx = ButtonKind == Kind.Nav ? 16 : 14;
+                bool hasIcon = !string.IsNullOrEmpty(IconGlyph);
+                int textW = string.IsNullOrEmpty(Text) ? 0 : TextRenderer.MeasureText(g, Text, Font).Width;
+
+                if (hasIcon)
                 {
-                    using (var iconFont = new Font("Segoe MDL2 Assets", ButtonKind == Kind.Nav ? 12f : 10f))
+                    Rectangle iconRect;
+                    if (ButtonKind == Kind.Nav)
                     {
-                        iconW = TextRenderer.MeasureText(g, IconGlyph, iconFont, Size.Empty, TextFormatFlags.NoPadding).Width;
-                        var iconRect = new Rectangle(
-                            ButtonKind == Kind.Nav ? rect.X + Padding.Left : rect.X + (Width - iconW) / 2 - (Text.Length * 4),
-                            rect.Y, iconW + 4, rect.Height);
-                        // 图标和文本一起居中（Nav 左对齐时图标固定左侧）
-                        if (ButtonKind == Kind.Nav)
-                        {
-                            TextRenderer.DrawText(g, IconGlyph, iconFont, iconRect, text,
-                                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-                        }
-                        else
-                        {
-                            int textW = TextRenderer.MeasureText(Text, Font).Width;
-                            int total = iconW + 6 + textW;
-                            var ir = new Rectangle((Width - total) / 2, rect.Y, iconW + 4, rect.Height);
-                            TextRenderer.DrawText(g, IconGlyph, iconFont, ir, text,
-                                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-                            var tr = new Rectangle(ir.Right + 4, rect.Y, textW + 4, rect.Height);
-                            TextRenderer.DrawText(g, Text, Font, tr, text,
-                                TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
-                        }
+                        iconRect = new Rectangle(rect.X + Padding.Left,
+                            rect.Y + (rect.Height - iconPx) / 2, iconPx, iconPx);
+                        Icons.Draw(g, IconGlyph, iconRect, text);
+                        var textRect = new Rectangle(iconRect.Right + 8, rect.Y,
+                            Math.Max(10, rect.Width - iconRect.Right - 12), rect.Height);
+                        TextRenderer.DrawText(g, Text, Font, textRect, text, flags);
+                    }
+                    else
+                    {
+                        int total = iconPx + 6 + textW;
+                        int left = rect.X + Math.Max(2, (rect.Width - total) / 2);
+                        iconRect = new Rectangle(left, rect.Y + (rect.Height - iconPx) / 2, iconPx, iconPx);
+                        Icons.Draw(g, IconGlyph, iconRect, text);
+                        var textRect = new Rectangle(iconRect.Right + 4, rect.Y, textW + 4, rect.Height);
+                        TextRenderer.DrawText(g, Text, Font, textRect, text, flags);
                     }
                 }
-
-                if (string.IsNullOrEmpty(IconGlyph) || ButtonKind == Kind.Nav)
+                else
                 {
                     var textRect = rect;
-                    if (!string.IsNullOrEmpty(IconGlyph) && ButtonKind == Kind.Nav)
-                        textRect = new Rectangle(rect.X + Padding.Left + iconW + 8, rect.Y, rect.Width - Padding.Left - iconW - 12, rect.Height);
+                    if (MyTextAlign == ContentAlignment.MiddleLeft)
+                        textRect = new Rectangle(rect.X + Padding.Left, rect.Y,
+                            Math.Max(10, rect.Width - Padding.Left - Padding.Right), rect.Height);
                     TextRenderer.DrawText(g, Text, Font, textRect, text, flags);
                 }
             }
@@ -605,8 +604,7 @@ namespace EasyerLauncher
                 else
                 {
                     using (var b = new SolidBrush(Theme.Input)) g.FillPath(b, Theme.RoundedPath(iconRect, 10));
-                    TextRenderer.DrawText(g, "?", Theme.BigIconFont, iconRect, Theme.ForegroundDim,
-                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                    Icons.Draw(g, "cube", iconRect, Theme.ForegroundDim);
                 }
                 g.Clip = prev;
             }

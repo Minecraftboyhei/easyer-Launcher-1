@@ -90,7 +90,7 @@ namespace EasyerLauncher.Pages
             var searchBtn = new W11Button
             {
                 Text = "搜索",
-                IconGlyph = "\uE721",
+                IconGlyph = "search",
                 ButtonKind = W11Button.Kind.Accent,
                 Bounds = new Rectangle(cx + 322, 89, 96, 33)
             };
@@ -133,6 +133,7 @@ namespace EasyerLauncher.Pages
         {
             int gen = ++_searchGen;
             _main.SetStatus("搜索中 ...");
+            _main.BeginTask("搜索中 ...");
             _flow.Controls.Clear();
 
             var hint = Controls.Find("countHint", true).FirstOrDefault() as Label;
@@ -169,11 +170,13 @@ namespace EasyerLauncher.Pages
                     card.LoadIcon(null);
                 }
                 _flow.ResumeLayout(true);
+                _main.EndTask();
                 _main.SetStatus("搜索完成");
             }
             catch (Exception ex)
             {
                 if (gen != _searchGen || IsDisposed) return;
+                _main.EndTask();
                 if (hint != null) hint.Text = "";
                 _main.SetStatus("搜索失败：" + ex.Message);
                 _flow.Controls.Add(new Label
@@ -260,7 +263,7 @@ namespace EasyerLauncher.Pages
             var dlBtn = new W11Button
             {
                 Text = "下载所选版本",
-                IconGlyph = "\uE896",
+                IconGlyph = "download",
                 ButtonKind = W11Button.Kind.Accent,
                 Bounds = new Rectangle(20, 410, 220, 44),
                 Font = new Font(Theme.DefaultFontFamily, 11f, FontStyle.Bold)
@@ -286,16 +289,19 @@ namespace EasyerLauncher.Pages
             if (_list.SelectedIndex < 0) return;
             var file = _files[_list.SelectedIndex];
             _main.SetStatus("开始下载 " + file.FileName + " ...");
+            _main.BeginTask("下载 " + file.FileName);
             Task.Run(() =>
             {
                 try
                 {
-                    ModrinthClient.Download(file, _type, _gameDir, msg => _main.SetStatus("[内容] " + msg));
+                    ModrinthClient.Download(file, _type, _gameDir, msg => _main.ReportProgress("[内容] " + msg));
+                    _main.EndTask();
                     MessageBox.Show("下载完成！已放入游戏目录对应文件夹。", "Easyer",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
+                    _main.EndTask();
                     _main.SetStatus("下载失败：" + ex.Message);
                     MessageBox.Show("下载失败：\n" + ex.Message, "Easyer", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
