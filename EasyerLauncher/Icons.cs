@@ -356,7 +356,23 @@ namespace EasyerLauncher
                 });
         }
 
-        /// <summary>默认头像：标准 Steve 脸（本地生成 8x8，不联网）。像素布局照原版皮肤头部正面。</summary>
+        /// <summary>
+        /// 原版 Steve 头像：像素取自官方皮肤的头部正面（64x32 皮肤中的 x8..15 / y8..15 区域），
+        /// 逐像素 RGB（行优先，每像素 3 字节 × 8×8 = 192 个值）。
+        /// </summary>
+        private static readonly byte[] SteveFace =
+        {
+            47, 32, 13, 43, 30, 13, 47, 31, 15, 40, 28, 11, 36, 24, 8, 38, 26, 10, 43, 30, 13, 42, 29, 13,
+            43, 30, 13, 43, 30, 13, 43, 30, 13, 51, 36, 17, 66, 42, 18, 63, 42, 21, 44, 30, 14, 40, 28, 11,
+            43, 30, 13, 182, 137, 108, 189, 142, 114, 198, 150, 128, 189, 139, 114, 189, 142, 116, 172, 118, 90, 52, 37, 18,
+            170, 125, 102, 180, 132, 109, 170, 125, 102, 173, 128, 109, 156, 114, 92, 187, 137, 114, 156, 105, 76, 156, 105, 76,
+            180, 132, 109, 255, 255, 255, 82, 61, 137, 181, 123, 103, 187, 137, 114, 82, 61, 137, 255, 255, 255, 170, 125, 102,
+            156, 99, 70, 179, 123, 98, 183, 130, 114, 106, 64, 48, 106, 64, 48, 190, 136, 108, 162, 106, 71, 128, 83, 52,
+            144, 94, 67, 150, 95, 64, 119, 66, 53, 119, 66, 53, 119, 66, 53, 119, 66, 53, 143, 94, 62, 129, 83, 57,
+            111, 69, 44, 109, 67, 42, 129, 83, 57, 129, 83, 57, 122, 78, 51, 131, 85, 59, 131, 85, 59, 122, 78, 51
+        };
+
+        /// <summary>默认头像：原版 Steve 脸（本地生成，不联网；颜色取自官方皮肤）。</summary>
         public static Bitmap SteveAvatar(int size)
         {
             var bmp = new Bitmap(size, size);
@@ -364,35 +380,17 @@ namespace EasyerLauncher
             {
                 float u = size / 8f;
                 // 用整数边界铺格子：小尺寸（8x8）时也不能重叠或留缝
-                void Cell(int x, int y, Color c)
+                for (int y = 0; y < 8; y++)
                 {
-                    int x0 = (int)Math.Round(x * u), x1 = (int)Math.Round((x + 1) * u);
-                    int y0 = (int)Math.Round(y * u), y1 = (int)Math.Round((y + 1) * u);
-                    using var b = new SolidBrush(c);
-                    g.FillRectangle(b, x0, y0, Math.Max(1, x1 - x0), Math.Max(1, y1 - y0));
-                }
-                var hair = Color.FromArgb(47, 31, 23);        // 深棕头发
-                var skin = Color.FromArgb(194, 130, 90);      // 肤色
-                var eyeW = Color.FromArgb(255, 255, 255);     // 眼白
-                var eyeP = Color.FromArgb(78, 62, 134);       // 紫 pupil
-                var nose = Color.FromArgb(106, 64, 40);       // 鼻子
-                var mouth = Color.FromArgb(84, 50, 32);       // 嘴
-                var chin = Color.FromArgb(94, 58, 36);        // 下巴胡茬
-                // 0-1 行：头发整行
-                for (int x = 0; x < 8; x++) { Cell(x, 0, hair); Cell(x, 1, hair); }
-                // 2-3 行：两侧鬓角
-                for (int y = 2; y <= 3; y++)
                     for (int x = 0; x < 8; x++)
-                        Cell(x, y, x is 0 or 7 ? hair : skin);
-                // 4 行：眼睛（眼白在外、瞳孔相邻居中）
-                Cell(2, 4, eyeW); Cell(3, 4, eyeP); Cell(4, 4, eyeP); Cell(5, 4, eyeW);
-                Cell(0, 4, skin); Cell(1, 4, skin); Cell(6, 4, skin); Cell(7, 4, skin);
-                // 5 行：鼻子
-                for (int x = 0; x < 8; x++) Cell(x, 5, x is 3 or 4 ? nose : skin);
-                // 6 行：嘴
-                for (int x = 0; x < 8; x++) Cell(x, 6, x is 3 or 4 ? mouth : skin);
-                // 7 行：下巴胡茬
-                for (int x = 0; x < 8; x++) Cell(x, 7, x >= 2 && x <= 5 ? chin : skin);
+                    {
+                        int i = (y * 8 + x) * 3;
+                        using var b = new SolidBrush(Color.FromArgb(SteveFace[i], SteveFace[i + 1], SteveFace[i + 2]));
+                        int x0 = (int)Math.Round(x * u), x1 = (int)Math.Round((x + 1) * u);
+                        int y0 = (int)Math.Round(y * u), y1 = (int)Math.Round((y + 1) * u);
+                        g.FillRectangle(b, x0, y0, Math.Max(1, x1 - x0), Math.Max(1, y1 - y0));
+                    }
+                }
             }
             return bmp;
         }
