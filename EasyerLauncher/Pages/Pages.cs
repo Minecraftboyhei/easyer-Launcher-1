@@ -164,9 +164,9 @@ namespace EasyerLauncher.Pages
     {
         private readonly MainForm _main;
         private AccountList _list;
-        private TextBox _offlineName;
-        private TextBox _clientId;
-        private TextBox _extUser, _extPass;
+        private RoundField _offlineName;
+        private RoundField _clientId;
+        private RoundField _extUser, _extPass;
         private bool _deviceCodeWaiting = false;
         private W11Card _leftCard, _rightCard;
 
@@ -246,10 +246,9 @@ namespace EasyerLauncher.Pages
                 Location = new Point(20, 56),
                 AutoSize = true
             });
-            _offlineName = new TextBox
+            _offlineName = new RoundField
             {
-                Bounds = new Rectangle(20, 88, 300, 32),
-                BorderStyle = BorderStyle.FixedSingle
+                Bounds = new Rectangle(20, 88, 300, 34)
             };
             _rightCard.Controls.Add(_offlineName);
 
@@ -300,10 +299,9 @@ namespace EasyerLauncher.Pages
                 Location = new Point(20, 220),
                 AutoSize = true
             });
-            _clientId = new TextBox
+            _clientId = new RoundField
             {
-                Bounds = new Rectangle(20, 322, 300, 30),
-                BorderStyle = BorderStyle.FixedSingle,
+                Bounds = new Rectangle(20, 322, 300, 34),
                 // 内置 ID 不明文展示；只有用户自建了应用（配置值 ≠ 内置）才显示
                 Text = _main.Cfg.MsClientId == EasyerLauncher.Core.Auth.MicrosoftAuth.DefaultClientId ? "" : _main.Cfg.MsClientId,
                 PlaceholderText = "留空 = 使用内置登录应用",
@@ -403,19 +401,16 @@ namespace EasyerLauncher.Pages
                 Location = new Point(20, 452),
                 AutoSize = true
             });
-            _extUser = new TextBox
+            _extUser = new RoundField
             {
-                Bounds = new Rectangle(20, 508, 300, 30),
-                BorderStyle = BorderStyle.FixedSingle,
+                Bounds = new Rectangle(20, 508, 300, 34),
                 PlaceholderText = "用户名或邮箱"
             };
             _rightCard.Controls.Add(_extUser);
-            _extPass = new TextBox
+            _extPass = new RoundField(password: true)
             {
-                Bounds = new Rectangle(20, 544, 300, 30),
-                BorderStyle = BorderStyle.FixedSingle,
-                PlaceholderText = "密码",
-                UseSystemPasswordChar = true
+                Bounds = new Rectangle(20, 544, 300, 34),
+                PlaceholderText = "密码"
             };
             _rightCard.Controls.Add(_extPass);
             var extBtn = new W11Button
@@ -557,7 +552,7 @@ namespace EasyerLauncher.Pages
     public class SettingsPage : Panel
     {
         private readonly MainForm _main;
-        private TextBox _gameDir, _customBg, _customCard, _customFg;
+        private RoundField _gameDir, _customBg, _customCard, _customFg;
         private ComboBox _java, _themeMode;
         private NumericUpDown _mem, _w, _h;
         private CheckBox _fullscreen;
@@ -582,7 +577,7 @@ namespace EasyerLauncher.Pages
             var card1 = new W11Card { Bounds = new Rectangle(x, 90, w1, 250) };
             Controls.Add(card1);
             card1.Controls.Add(Mk("游戏目录（默认 = 启动器同级的 .minecraft）", 24, 20));
-            _gameDir = new TextBox { Bounds = new Rectangle(24, 48, 520, 32), BorderStyle = BorderStyle.FixedSingle, Text = cfg.GameDirectory };
+            _gameDir = new RoundField { Bounds = new Rectangle(24, 48, 520, 34), Text = cfg.GameDirectory };
             card1.Controls.Add(_gameDir);
             var browseBtn = new W11Button { Text = "浏览", Bounds = new Rectangle(556, 47, 90, 34) };
             browseBtn.Click += (s, e) =>
@@ -728,10 +723,10 @@ namespace EasyerLauncher.Pages
             }
         }
 
-        private TextBox HexBox(Control parent, string label, string value, int x, int y)
+        private RoundField HexBox(Control parent, string label, string value, int x, int y)
         {
             parent.Controls.Add(new Label { Text = label, AutoSize = true, BackColor = Color.Transparent, ForeColor = Theme.ForegroundDim, Location = new Point(x, y) });
-            var tb = new TextBox { Bounds = new Rectangle(x, y + 22, 170, 30), BorderStyle = BorderStyle.FixedSingle, Text = value };
+            var tb = new RoundField { Bounds = new Rectangle(x, y + 22, 170, 32), Text = value };
             parent.Controls.Add(tb);
             return tb;
         }

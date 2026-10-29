@@ -13,7 +13,7 @@ namespace EasyerLauncher.Pages
     {
         private readonly MainForm _main;
         private FlowLayoutPanel _flow;
-        private TextBox _search;
+        private RoundField _search;
         private W11Button[] _chips;
         private List<VersionManifest.VersionEntry> _versions;
         private readonly string[] _chipNames = { "全部", "正式版", "快照", "Beta", "Alpha" };
@@ -31,6 +31,8 @@ namespace EasyerLauncher.Pages
             base.OnResize(eventargs);
             if (_flow != null)
                 _flow.Bounds = new Rectangle(32, 134, Math.Max(600, Width - 64), Math.Max(300, Height - 158));
+            if (_loading != null)
+                _loading.Bounds = new Rectangle(32, 134, Math.Max(600, Width - 64), Math.Max(300, Height - 158));
         }
 
         private void Build()
@@ -66,10 +68,9 @@ namespace EasyerLauncher.Pages
             }
 
             // 搜索框
-            _search = new TextBox
+            _search = new RoundField
             {
-                Bounds = new Rectangle(cx + 16, 89, 220, 31),
-                BorderStyle = BorderStyle.FixedSingle,
+                Bounds = new Rectangle(cx + 16, 89, 220, 34),
                 PlaceholderText = "搜索版本号，如 1.20.1",
                 Font = Theme.SmallFont
             };
@@ -97,11 +98,21 @@ namespace EasyerLauncher.Pages
                 WrapContents = true
             };
             Controls.Add(_flow);
+
+            // 加载遮罩：盖在内容区上，转 60fps 的环
+            _loading = new LoadingOverlay("正在获取版本清单 ...");
+            _loading.Bounds = new Rectangle(32, 134, 976, 546);
+            Controls.Add(_loading);
+            _loading.BringToFront();
         }
+
+        private LoadingOverlay _loading;
 
         private async Task LoadAsync()
         {
             _main.SetStatus("正在获取版本清单 ...");
+            _loading.Caption = "正在获取版本清单 ...";
+            _loading.Visible = true;
             try
             {
                 _versions = await Task.Run(() => VersionManifest.GetVersions());
@@ -110,8 +121,12 @@ namespace EasyerLauncher.Pages
             }
             catch (Exception ex)
             {
+                _loading.Caption = "加载失败：" + ex.Message;
+                _loading.Spinner.Stop();
                 _main.SetStatus("获取版本清单失败：" + ex.Message);
+                return;
             }
+            _loading.Visible = false;
         }
 
         private void ApplyFilter()

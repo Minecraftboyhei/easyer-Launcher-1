@@ -62,12 +62,9 @@ namespace EasyerLauncher
                 AutoSize = true
             });
 
-            var box = new TextBox
+            var box = new RoundField(multiline: true, scrollBars: ScrollBars.Vertical)
             {
-                Multiline = true,
                 ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
-                BorderStyle = BorderStyle.FixedSingle,
                 Font = Theme.BodyFont,
                 Bounds = new Rectangle(24, 92, 556, 348),
                 Text = Statement

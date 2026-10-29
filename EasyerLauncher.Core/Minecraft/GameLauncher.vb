@@ -187,7 +187,7 @@ Namespace Minecraft
                 .Arguments = args,
                 .WorkingDirectory = opt.GameDir,
                 .UseShellExecute = False,
-                .CreateNoWindow = False,
+                .CreateNoWindow = True,   ' 隐藏控制台黑窗（也不进任务栏）；游戏自己的窗口不受影响
                 .RedirectStandardOutput = False,
                 .RedirectStandardError = False
             }

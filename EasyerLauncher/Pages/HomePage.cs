@@ -35,7 +35,7 @@ namespace EasyerLauncher.Pages
 
         private W11Card _launchCard, _logCard;
         private W11Card[] _infoCards;
-        private TextBox _logBox;
+        private RoundField _logBox;
 
         protected override void OnResize(EventArgs eventargs)
         {
@@ -228,16 +228,13 @@ namespace EasyerLauncher.Pages
             // ===== 日志 =====
             _logCard = new W11Card { Bounds = new Rectangle(32, 560, 976, 150) };
             Controls.Add(_logCard);
-            _logBox = new TextBox
+            _logBox = new RoundField(multiline: true, scrollBars: ScrollBars.Vertical)
             {
-                Multiline = true,
+                Bounds = new Rectangle(16, 14, 944, 122),
                 ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
+                Font = Theme.SmallFont,
                 BackColor = Theme.Input,
                 ForeColor = Theme.ForegroundDim,
-                BorderStyle = BorderStyle.None,
-                Font = Theme.SmallFont,
-                Bounds = new Rectangle(16, 14, 944, 122),
                 Text = "Easyer Launcher 1 — 日志\r\n"
             };
             _logCard.Controls.Add(_logBox);

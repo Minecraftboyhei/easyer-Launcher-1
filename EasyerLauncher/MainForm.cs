@@ -143,7 +143,7 @@ namespace EasyerLauncher
             try
             {
                 System.IO.Directory.CreateDirectory(dir);
-                foreach (var key in new[] { "account", "home", "download", "mods", "packs", "loaders", "settings" })
+                foreach (var key in new[] { "account", "home", "tasks", "download", "mods", "packs", "loaders", "settings" })
                 {
                     Navigate(key);
                     await System.Threading.Tasks.Task.Delay(key == "mods" || key == "download" ? 4500 : 2000);
@@ -247,8 +247,13 @@ namespace EasyerLauncher
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = Theme.SmallFont,
                 ForeColor = Theme.ForegroundDim,
-                Padding = new Padding(10, 0, 0, 0)
+                Padding = new Padding(10, 0, 0, 0),
+                Cursor = Cursors.Hand
             };
+            // 状态栏就是任务中心的入口：点一下看总进度和明细
+            StatusLabel.Click += (s, e) => Navigate("tasks");
+            StatusLabel.MouseEnter += (s, e) => StatusLabel.ForeColor = Theme.Accent;
+            StatusLabel.MouseLeave += (s, e) => StatusLabel.ForeColor = Theme.ForegroundDim;
             _ring = new ProgressRing { Dock = DockStyle.Right, Width = 220, Visible = false };
             _updateHint = new Label
             {
@@ -287,7 +292,37 @@ namespace EasyerLauncher
                 StatusLabel.Text = msg;
         }
 
-        // ================= 后台任务指示 =================
+        // ================= 任务板（任务中心数据源） =================
+
+        /// <summary>一条任务记录：进行中或已完成（历史）。</summary>
+        public sealed class TaskItem
+        {
+            public string Name;
+            public string Category = "任务";
+            public string CurrentMsg = "";
+            public float Progress = -1f;     // -1 = 不确定
+            public bool Running = true;
+            public DateTime StartedAt = DateTime.Now;
+            public DateTime? EndedAt;
+        }
+
+        /// <summary>全部任务（进行中在前，含最近完成的历史）。</summary>
+        public readonly List<TaskItem> Tasks = new List<TaskItem>();
+        public event Action TasksChanged;
+
+        private static string Categorize(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "任务";
+            if (name.Contains("启动") || name.Contains("加载游戏")) return "游戏加载";
+            if (name.Contains("整合包")) return "整合包";
+            if (name.Contains("搜索")) return "搜索";
+            if (name.Contains("Forge") || name.Contains("forge") || name.Contains("Neo") ||
+                name.Contains("fabric") || name.Contains("Fabric") || name.Contains("Quilt") || name.Contains("加载器"))
+                return "加载器";
+            if (name.Contains("模组") || name.Contains("内容") || name.Contains(".jar")) return "模组下载";
+            if (name.Contains("下载") || name.Contains("安装") || name.Contains("获取")) return "游戏下载";
+            return "任务";
+        }
 
         /// <summary>任务状态变化：caption / 进度(-1=不确定) / 是否进行中。</summary>
         public event Action<string, float, bool> TaskState;
@@ -296,6 +331,10 @@ namespace EasyerLauncher
         {
             if (InvokeRequired) { BeginInvoke(new Action(() => BeginTask(caption))); return; }
             _ring.Start(caption, -1f);
+            var t = new TaskItem { Name = caption, Category = Categorize(caption), CurrentMsg = caption, Progress = -1f };
+            Tasks.Insert(0, t);
+            if (Tasks.Count > 24) Tasks.RemoveAt(Tasks.Count - 1);
+            TasksChanged?.Invoke();
             TaskState?.Invoke(caption, -1f, true);
         }
 
@@ -303,6 +342,13 @@ namespace EasyerLauncher
         {
             if (InvokeRequired) { BeginInvoke(new Action(() => UpdateTask(pct, caption))); return; }
             _ring.Set(pct, caption);
+            var t = Tasks.Find(x => x.Running);
+            if (t != null)
+            {
+                t.Progress = pct;
+                if (!string.IsNullOrEmpty(caption)) t.CurrentMsg = caption;
+            }
+            TasksChanged?.Invoke();
             TaskState?.Invoke(caption, pct, true);
         }
 
@@ -310,6 +356,15 @@ namespace EasyerLauncher
         {
             if (InvokeRequired) { BeginInvoke(new Action(EndTask)); return; }
             _ring.Stop();
+            var t = Tasks.Find(x => x.Running);
+            if (t != null)
+            {
+                t.Running = false;
+                t.Progress = Math.Max(0f, t.Progress);
+                t.EndedAt = DateTime.Now;
+                if (t.Progress < 0f) t.Progress = 1f;
+            }
+            TasksChanged?.Invoke();
             TaskState?.Invoke("", 0f, false);
         }
 
@@ -379,6 +434,7 @@ namespace EasyerLauncher
                     "packs" => new Pages.ModpacksPage(this),
                     "account" => new Pages.AccountPage(this),
                     "settings" => new Pages.SettingsPage(this),
+                    "tasks" => new Pages.TaskCenterPage(this),
                     _ => new Panel()
                 };
                 Pages[key] = page;

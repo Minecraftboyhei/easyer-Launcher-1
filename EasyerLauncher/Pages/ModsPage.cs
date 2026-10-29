@@ -14,7 +14,7 @@ namespace EasyerLauncher.Pages
     {
         private readonly MainForm _main;
         private FlowLayoutPanel _flow;
-        private TextBox _search;
+        private RoundField _search;
         private W11Button[] _chips;
         private readonly string[] _chipNames = { "模组", "资源包", "光影", "数据包" };
         private readonly ModrinthClient.ContentType[] _types =
@@ -77,10 +77,9 @@ namespace EasyerLauncher.Pages
             }
 
             // 搜索框
-            _search = new TextBox
+            _search = new RoundField
             {
-                Bounds = new Rectangle(cx + 12, 90, 300, 31),
-                BorderStyle = BorderStyle.FixedSingle,
+                Bounds = new Rectangle(cx + 12, 90, 300, 34),
                 PlaceholderText = "搜索，如：sodium / 全新材质 / 光影",
                 Font = Theme.BodyFont
             };
@@ -117,7 +116,15 @@ namespace EasyerLauncher.Pages
                 BackColor = Color.Transparent
             };
             Controls.Add(_flow);
+
+            _loading = new LoadingOverlay("搜索中 ...");
+            _loading.Bounds = new Rectangle(32, 138, 976, 542);
+            _loading.Visible = false;
+            Controls.Add(_loading);
+            _loading.BringToFront();
         }
+
+        private LoadingOverlay _loading;
 
         private string GameVerFilter()
         {
@@ -135,6 +142,7 @@ namespace EasyerLauncher.Pages
             _main.SetStatus("搜索中 ...");
             _main.BeginTask("搜索中 ...");
             _flow.Controls.Clear();
+            if (_loading != null) { _loading.Caption = "搜索中 ..."; _loading.Visible = true; }
 
             var hint = Controls.Find("countHint", true).FirstOrDefault() as Label;
             if (hint != null) hint.Text = "";
@@ -170,12 +178,14 @@ namespace EasyerLauncher.Pages
                     card.LoadIcon(null);
                 }
                 _flow.ResumeLayout(true);
+                if (_loading != null) _loading.Visible = false;
                 _main.EndTask();
                 _main.SetStatus("搜索完成");
             }
             catch (Exception ex)
             {
                 if (gen != _searchGen || IsDisposed) return;
+                if (_loading != null) _loading.Visible = false;
                 _main.EndTask();
                 if (hint != null) hint.Text = "";
                 _main.SetStatus("搜索失败：" + ex.Message);

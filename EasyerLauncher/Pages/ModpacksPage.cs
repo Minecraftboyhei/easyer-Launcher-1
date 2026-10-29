@@ -14,7 +14,7 @@ namespace EasyerLauncher.Pages
     {
         private readonly MainForm _main;
         private FlowLayoutPanel _flow;
-        private TextBox _search;
+        private RoundField _search;
         private Label _hint;
         private int _searchGen;
 
@@ -37,10 +37,9 @@ namespace EasyerLauncher.Pages
         {
             Controls.Add(PageUtil.Title("整合包"));
 
-            _search = new TextBox
+            _search = new RoundField
             {
-                Bounds = new Rectangle(32, 90, 380, 31),
-                BorderStyle = BorderStyle.FixedSingle,
+                Bounds = new Rectangle(32, 90, 380, 34),
                 PlaceholderText = "搜索整合包，如：cobblemon / 机械动力 / 生存",
                 Font = Theme.BodyFont
             };
@@ -85,7 +84,15 @@ namespace EasyerLauncher.Pages
                 BackColor = Color.Transparent
             };
             Controls.Add(_flow);
+
+            _loading = new LoadingOverlay("搜索整合包中 ...");
+            _loading.Bounds = new Rectangle(32, 138, 976, 542);
+            _loading.Visible = false;
+            Controls.Add(_loading);
+            _loading.BringToFront();
         }
+
+        private LoadingOverlay _loading;
 
         private async Task Search(string query)
         {
@@ -94,6 +101,7 @@ namespace EasyerLauncher.Pages
             _main.BeginTask("搜索整合包中 ...");
             _flow.Controls.Clear();
             _hint.Text = "";
+            if (_loading != null) { _loading.Caption = "搜索整合包中 ..."; _loading.Visible = true; }
 
             try
             {
@@ -122,12 +130,14 @@ namespace EasyerLauncher.Pages
                     card.LoadIcon(null);
                 }
                 _flow.ResumeLayout(true);
+                if (_loading != null) _loading.Visible = false;
                 _main.EndTask();
                 _main.SetStatus("整合包搜索完成");
             }
             catch (Exception ex)
             {
                 if (gen != _searchGen || IsDisposed) return;
+                if (_loading != null) _loading.Visible = false;
                 _main.EndTask();
                 _main.SetStatus("搜索失败：" + ex.Message);
                 _flow.Controls.Add(new Label
