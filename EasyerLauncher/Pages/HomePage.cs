@@ -207,8 +207,11 @@ namespace EasyerLauncher.Pages
                     ForeColor = Theme.ForegroundDim,
                     Location = new Point(22, 66),
                     AutoSize = false,
-                    Size = new Size(272, 18)
+                    Size = new Size(272, 18),
+                    // Java 环境那张卡（index 1）的值是后台异步回填的，先把引用存起来
+                    Tag = i == 1 ? "javainfo" : null
                 });
+                if (i == 1) _javaValueLabel = (Label)card.Controls[card.Controls.Count - 1];
                 var btn = new W11Button
                 {
                     Text = def.Btn,
@@ -241,25 +244,49 @@ namespace EasyerLauncher.Pages
 
             LoadVersions();
             Relayout();
+            FillJavaInfoAsync();
         }
 
         private static string Truncate(string s, int n) => s.Length <= n ? s : s.Substring(0, n) + "…";
 
         private string[] InfoLines()
         {
-            var javaVer = "未检测";
-            try
-            {
-                var j = JavaLocator.FindAll().FirstOrDefault();
-                if (j != null) javaVer = Truncate(j.VersionString, 36);
-            }
-            catch { }
+            // Java 检测会 spawn 一个 `java -version` 进程并等它退出（100~500ms），
+            // 放在构造里就是"点开主页卡一下"的元凶 —— 改成先占位、后台回填。
             return new[]
             {
                 _main.Cfg.GameDirectory,
-                javaVer,
+                "检测中 ...",
                 _main.Cfg.MaxMemoryMB + " MB"
             };
+        }
+
+        private Label _javaValueLabel;
+        private bool _javaFilled;
+
+        private void FillJavaInfoAsync()
+        {
+            if (_javaFilled || _javaValueLabel == null || IsDisposed) return;
+            _javaFilled = true;
+            var page = this;
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                var j = JavaLocator.FindAll().FirstOrDefault();
+                var text = j != null ? Truncate(j.VersionString, 36) : "未找到 Java，去设置页手动指定";
+                try
+                {
+                    if (page.IsDisposed) return;
+                    page.BeginInvoke(new Action(() =>
+                    {
+                        if (!page.IsDisposed && _javaValueLabel != null && !_javaValueLabel.IsDisposed)
+                        {
+                            _javaValueLabel.Text = text;
+                            _javaValueLabel.Invalidate();
+                        }
+                    }));
+                }
+                catch { }
+            });
         }
 
         private void LoadVersions()

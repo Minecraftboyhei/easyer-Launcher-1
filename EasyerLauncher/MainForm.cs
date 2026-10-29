@@ -11,7 +11,7 @@ namespace EasyerLauncher
     public class MainForm : Form
     {
         public LauncherConfig Cfg;
-        public Panel Sidebar;
+        public SidebarPanel Sidebar;
         public Panel Content;
         public Label StatusLabel;
         public W11Button[] NavButtons;
@@ -58,6 +58,8 @@ namespace EasyerLauncher
                     Theme.EnableWin11Window(this);
                     Theme.ApplyTo(this);
                     Sidebar.BackColor = Theme.Sidebar;
+                    Sidebar.Invalidate();
+                    Content.BackColor = Theme.Background;
                     foreach (var b in NavButtons) b.Invalidate();
                     Invalidate();
                 }));
@@ -75,6 +77,11 @@ namespace EasyerLauncher
                     StartBackgroundChecks();
             };
             Navigate("home");
+            FormClosing += (s, e) => Anim.Shutdown();
+            // 滚轮平滑滚动（弹窗不受影响）
+            var smooth = new SmoothScrollFilter(this);
+            Application.AddMessageFilter(smooth);
+            FormClosed += (s, e) => Application.RemoveMessageFilter(smooth);
         }
 
         private void StartBackgroundChecks()
@@ -152,7 +159,7 @@ namespace EasyerLauncher
         private void BuildUi()
         {
             // ===== 侧边栏 =====
-            Sidebar = new Panel { Dock = DockStyle.Left, Width = 228, BackColor = Theme.Sidebar };
+            Sidebar = new SidebarPanel { Dock = DockStyle.Left, Width = 228, BackColor = Theme.Sidebar };
             Controls.Add(Sidebar);
 
             var logo = new Label
@@ -188,7 +195,9 @@ namespace EasyerLauncher
                     ButtonKind = W11Button.Kind.Nav,
                     Bounds = new Rectangle(14, y, 200, 44),
                     MyTextAlign = ContentAlignment.MiddleLeft,
-                    Padding = new Padding(14, 0, 0, 0)
+                    Padding = new Padding(14, 0, 0, 0),
+                    // 透明才能露出侧边栏自己画的滑动药丸；不透明的话药丸永远被盖住
+                    BackColor = Color.Transparent
                 };
                 string key = item.Key;
                 btn.Click += (s, e) => Navigate(key);
@@ -226,7 +235,8 @@ namespace EasyerLauncher
             Sidebar.Controls.Add(_verLabel);
 
             // ===== 内容区（页面自己带滚动，外层不再 AutoScroll，省掉一次布局抖动）=====
-            Content = new Panel { Dock = DockStyle.Fill, AutoScroll = false };
+            // 底色必须和页面一致：转场时新旧页会错位一两帧，露出来的就是这层
+            Content = new Panel { Dock = DockStyle.Fill, AutoScroll = false, BackColor = Theme.Background };
             Controls.Add(Content);
 
             // ===== 状态栏 =====
@@ -325,21 +335,38 @@ namespace EasyerLauncher
         public void RefreshHomeVersions()
         {
             Pages.Remove("home");
-            if (CurrentPage == "home") Navigate("home");
+            if (CurrentPage == "home") Navigate("home", true);
         }
 
-        public void Navigate(string key)
+        public void Navigate(string key) => Navigate(key, false);
+
+        public void Navigate(string key, bool force)
         {
+            // 已经在当前页，不重复播动画（否则点同一项会"抖"一下）
+            if (!force && CurrentPage == key && _pageHost != null && !_pageHost.IsDisposed) return;
+
             CurrentPage = key;
-            Content.Controls.Clear();
-            if (_pageHost != null)
+
+            // ---- 1) 先给反馈：导航立即点亮，药丸开始滑；页面再慢慢来 ----
+            int idx = -1;
+            for (int i = 0; i < NavButtons.Length; i++)
             {
-                try { _pageHost.Controls.Clear(); _pageHost.Dispose(); } catch { }
-                _pageHost = null;
+                bool sel = Nav[i].Key == key;
+                if (sel) idx = i;
+                if (NavButtons[i].Selected != sel)
+                {
+                    NavButtons[i].Selected = sel;
+                    NavButtons[i].Invalidate();
+                }
             }
+            MovePillTo(idx, _pillReady);
+            _pillReady = true;
+
+            // ---- 2) 清掉上一轮的残局（快速连点时会有多份 host 叠着）----
             _navAnim?.Stop();
-            _navAnim?.Dispose();
             _navAnim = null;
+            var oldHost = _pageHost;
+            DropStaleHosts(oldHost);
 
             if (!Pages.ContainsKey(key))
             {
@@ -359,59 +386,109 @@ namespace EasyerLauncher
 
             var p = Pages[key];
             p.Dock = DockStyle.Fill;
+            if (p.Parent != null && !ReferenceEquals(p.Parent, oldHost))
+                p.Parent.Controls.Remove(p);
+
             // 固定尺寸的 host：动画只改 Top，不改 Size —— 子页面因此不会被反复重排（卡顿根因）
-            _pageHost = new Panel
+            var host = new Panel
             {
                 Bounds = new Rectangle(0, kPageSlide, Content.ClientSize.Width, Content.ClientSize.Height),
                 Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom,
                 BackColor = Theme.Background
             };
-            _pageHost.SuspendLayout();
-            _pageHost.Controls.Add(p);
-            Content.Controls.Add(_pageHost);
+            host.SuspendLayout();
+            host.Controls.Add(p);
+            Content.Controls.Add(host);
+            host.BringToFront();          // Controls[0] 才是最上层，Add 默认加到后面会被旧页盖住
             Theme.ApplyTo(p);
-            // 必须用 true：SkipLayout(false) 会让页面的 Dock.Fill 永远不生效，页面卡在 200x100
-            _pageHost.ResumeLayout(true);
-            AnimatePageIn(_pageHost);
+            // 必须用 true：ResumeLayout(false) 会让页面的 Dock.Fill 永远不生效，页面卡在 200x100
+            host.ResumeLayout(true);
+            _pageHost = host;
 
-            for (int i = 0; i < NavButtons.Length; i++)
-                NavButtons[i].Selected = Nav[i].Key == key;
-            foreach (var b in NavButtons) b.Invalidate();
+            // ---- 3) 转场：新页从下方轻推上来，旧页同时被顶走一点点 ----
+            AnimatePageIn(host, oldHost);
+        }
+
+        private const int kPageSlide = 30;
+
+        private Anim.Handle _navAnim;
+        private Panel _pageHost;
+        private Anim.Handle _pillAnim;
+        private bool _pillReady;
+
+        private void MovePillTo(int index, bool animate)
+        {
+            if (index < 0 || index >= NavButtons.Length || Sidebar.IsDisposed) return;
+            var b = NavButtons[index];
+            float toTop = b.Top;
+            float toH = b.Height;
+
+            if (!animate || !Sidebar.PillVisible)
+            {
+                Sidebar.PillVisible = true;
+                Sidebar.PillTop = toTop;
+                Sidebar.PillHeight = toH;
+                Sidebar.Invalidate();
+                return;
+            }
+
+            _pillAnim?.Stop();
+            float fromTop = Sidebar.PillTop, fromH = Sidebar.PillHeight;
+            if (Math.Abs(fromTop - toTop) < 0.5f) return;
+
+            _pillAnim = Anim.Run(300, Ease.OutQuart, t =>
+            {
+                if (Sidebar.IsDisposed) return;
+                Sidebar.MovePill(fromTop + (toTop - fromTop) * t, fromH + (toH - fromH) * t);
+            });
+        }
+
+        /// <summary>清掉除 keep 以外的 host（快速连点会留下正在退场的旧 host）。</summary>
+        private void DropStaleHosts(Control keep)
+        {
+            var stale = new List<Control>();
+            foreach (Control c in Content.Controls)
+                if (!ReferenceEquals(c, keep)) stale.Add(c);
+            foreach (var c in stale)
+            {
+                try { c.Controls.Clear(); } catch { }   // 先摘掉子页面，别跟着被 Dispose
+                try { Content.Controls.Remove(c); c.Dispose(); } catch { }
+            }
         }
 
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
-            if (_pageHost != null && _navAnim == null)
-                _pageHost.Bounds = new Rectangle(0, 0, Content.ClientSize.Width, Content.ClientSize.Height);
+            if (_pageHost != null && !_pageHost.IsDisposed)
+                _pageHost.Bounds = new Rectangle(0, _navAnim != null ? _pageHost.Top : 0,
+                    Content.ClientSize.Width, Content.ClientSize.Height);
         }
 
-        private const int kPageSlide = 26;
-        private System.Windows.Forms.Timer _navAnim;
-        private Panel _pageHost;
-
-        /// <summary>页面滑入动画（ease-out，约 170ms；只动 Top，不触发子布局）。</summary>
-        private void AnimatePageIn(Panel host)
+        /// <summary>
+        /// 页面转场：新页从下方滑入（30px，280ms，easeOutQuint），旧页同时上移离场并被覆盖。
+        /// 旧页留到动画结束才移除 —— 否则中途露出容器底色，切换会"闪一下"。
+        /// </summary>
+        private void AnimatePageIn(Panel host, Panel oldHost)
         {
-            const int frames = 10;
-            int frame = 0;
-            _navAnim = new System.Windows.Forms.Timer { Interval = 16 };
-            _navAnim.Tick += (s, e) =>
+            const double durMs = 280;
+            const int slide = kPageSlide;
+
+            _navAnim = Anim.Run(durMs, Ease.OutQuint, t =>
             {
-                if (host.IsDisposed) { _navAnim.Stop(); _navAnim.Dispose(); _navAnim = null; return; }
-                frame++;
-                float t = Math.Min(1f, frame / (float)frames);
-                float ease = 1f - (1f - t) * (1f - t);   // ease-out quad
-                host.Top = (int)Math.Round(kPageSlide * (1f - ease));
-                if (t >= 1f)
+                if (host.IsDisposed) return;
+                host.Top = (int)Math.Round(slide * (1f - t));
+                if (oldHost != null && !oldHost.IsDisposed)
+                    oldHost.Top = (int)Math.Round(-slide * 0.42f * t);
+            }, () =>
+            {
+                if (!host.IsDisposed) host.Top = 0;
+                if (oldHost != null && !oldHost.IsDisposed)
                 {
-                    host.Top = 0;
-                    _navAnim.Stop();
-                    _navAnim.Dispose();
-                    _navAnim = null;
+                    try { oldHost.Controls.Clear(); } catch { }
+                    try { Content.Controls.Remove(oldHost); oldHost.Dispose(); } catch { }
                 }
-            };
-            _navAnim.Start();
+                _navAnim = null;
+            }, host);
         }
 
         /// <summary>启动游戏（主页按钮触发）。</summary>

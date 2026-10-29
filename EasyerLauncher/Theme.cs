@@ -196,43 +196,62 @@ namespace EasyerLauncher
             return path;
         }
 
-        /// <summary>悬停/选中渐变动画器（16ms 步进，ease 风格趋近目标值）。</summary>
+        /// <summary>
+        /// 悬停渐变：走全局动画泵，按真实时间做指数趋近（帧率无关）。
+        /// 不再每个控件各开一个系统定时器——下载页几百张卡片同时构造时，
+        /// 那就是几百个 WM_TIMER，消息队列一堵，鼠标划过都发滞。
+        /// </summary>
         internal class HoverAnimator : IDisposable
         {
             private readonly Control _c;
-            private readonly System.Windows.Forms.Timer _t;
             private float _target;
+            private Anim.Handle _h;
 
+            /// <summary>时间常数（秒），越小越快。0.045 ≈ 45ms 到位。</summary>
+            public float Tau = 0.045f;
             public float Value;
 
             public HoverAnimator(Control c)
             {
                 _c = c;
-                _t = new System.Windows.Forms.Timer { Interval = 16 };
-                _t.Tick += Step;
                 c.Disposed += (s, e) => Dispose();
             }
 
             public void To(float target)
             {
                 _target = target;
-                _t.Start();
+                if (_h == null || !_h.Running)
+                    _h = Anim.Loop(Step, _c);
             }
 
-            private void Step(object s, EventArgs e)
+            /// <summary>直接落位，不做动画（主题切换等场景）。</summary>
+            public void Set(float v)
             {
-                Value += (_target - Value) * 0.32f;
-                if (Math.Abs(_target - Value) < 0.02f)
+                _target = v;
+                Value = v;
+                if (!_c.IsDisposed) _c.Invalidate();
+            }
+
+            private bool Step(double dt)
+            {
+                if (_c.IsDisposed) return false;
+                float k = 1f - (float)Math.Exp(-dt / Tau);
+                Value += (_target - Value) * k;
+                if (Math.Abs(_target - Value) < 0.004f)
                 {
                     Value = _target;
-                    _t.Stop();
+                    _h = null;
+                    if (!_c.IsDisposed) _c.Invalidate();
+                    return false;
                 }
                 if (!_c.IsDisposed) _c.Invalidate();
+                return true;
             }
 
             public void Dispose()
             {
-                try { _t?.Dispose(); } catch { }
+                try { _h?.Stop(); } catch { }
+                _h = null;
             }
         }
 
@@ -267,6 +286,20 @@ namespace EasyerLauncher
         private readonly Theme.HoverAnimator _anim;
         private bool _hover;
         private bool _down;
+        private float _press;
+        private Anim.Handle _pressH;
+
+        /// <summary>按下时的视觉反馈：整体内缩 1px + 填充加深，模拟真按下去。</summary>
+        private void PressTo(float v, double ms, Ease ease)
+        {
+            _pressH?.Stop();
+            float from = _press;
+            _pressH = Anim.Run(ms, ease, t =>
+            {
+                _press = from + (v - from) * t;
+                Invalidate();
+            }, null, this);
+        }
 
         public W11Button()
         {
@@ -280,17 +313,43 @@ namespace EasyerLauncher
         }
 
         protected override void OnMouseEnter(EventArgs e) { _hover = true; _anim.To(1f); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { _hover = false; _down = false; _anim.To(0f); base.OnMouseLeave(e); }
-        protected override void OnMouseDown(MouseEventArgs e) { _down = true; Invalidate(); base.OnMouseDown(e); }
-        protected override void OnMouseUp(MouseEventArgs e) { _down = false; Invalidate(); base.OnMouseUp(e); }
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            _hover = false;
+            if (_down) { _down = false; PressTo(0f, 120, Ease.OutCubic); }
+            _anim.To(0f);
+            base.OnMouseLeave(e);
+        }
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                _down = true;
+                PressTo(1f, 70, Ease.OutQuad);
+            }
+            base.OnMouseDown(e);
+        }
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            if (_down)
+            {
+                _down = false;
+                PressTo(0f, 170, Ease.OutCubic);
+            }
+            base.OnMouseUp(e);
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.Clear(Theme.BackdropOf(this));
+            // 透明背景的按钮（导航项）交给 OnPaintBackground 画父容器，
+            // 否则会盖掉侧边栏自己画的滑动选中块。
+            if (BackColor.A == 255) g.Clear(Theme.BackdropOf(this));
 
-            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            // 按下时整体内缩，做出"压下去"的手感
+            int inset = (int)Math.Round(_press * 1.3f);
+            var rect = new Rectangle(inset, inset, Width - 1 - inset * 2, Height - 1 - inset * 2);
             int radius = ButtonKind == Kind.Nav || ButtonKind == Kind.Chip ? Height / 2 : 8;
             using (var path = Theme.RoundedPath(rect, radius))
             {
@@ -298,7 +357,7 @@ namespace EasyerLauncher
                 Color text;
 
                 float t = _anim.Value;
-                if (_down) t = 1f;
+                if (_press > t) t = _press;    // 按下时平滑压到"最亮/最深"档
 
                 switch (ButtonKind)
                 {
