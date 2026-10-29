@@ -42,3 +42,8 @@ verify*/
 *.m4a
 *.mp3
 *.wav
+
+# 交付的单文件 exe 不入仓库（68MB，走 GitHub Actions CI 发布）
+/EasyerLauncher.exe
+/easyer-config.json
+/.minecraft/

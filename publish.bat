@@ -1,6 +1,7 @@
 @echo off
-rem Rebuild the single-file release package into dist\win-x64
-rem Run this after ANY code change, otherwise the exe users double-click stays old.
+rem Rebuild the single-file release package into the PROJECT ROOT: .\EasyerLauncher.exe
+rem There is exactly ONE launcher to double-click. Run this after ANY code change,
+rem otherwise the exe stays old. Debug build lives in EasyerLauncher\bin\Debug (for breakpoints only).
 cd /d "%~dp0"
 
 taskkill /F /IM EasyerLauncher.exe >nul 2>&1
@@ -10,7 +11,7 @@ dotnet publish EasyerLauncher\EasyerLauncher.csproj -c Release -r win-x64 --self
   -p:IncludeNativeLibrariesForSelfExtract=true ^
   -p:EnableCompressionInSingleFile=true ^
   -p:DebugType=None -p:DebugSymbols=false ^
-  -o dist\win-x64
+  -o .
 
 if errorlevel 1 (
   echo.
@@ -20,6 +21,6 @@ if errorlevel 1 (
 )
 
 echo.
-echo [OK] dist\win-x64\EasyerLauncher.exe
-for %%F in ("dist\win-x64\EasyerLauncher.exe") do echo     %%~zF bytes  %%~tF
+echo [OK] .\EasyerLauncher.exe
+for %%F in ("EasyerLauncher.exe") do echo     %%~zF bytes  %%~tF
 pause
