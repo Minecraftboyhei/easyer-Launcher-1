@@ -553,7 +553,7 @@ namespace EasyerLauncher.Pages
     {
         private readonly MainForm _main;
         private RoundField _gameDir, _customBg, _customCard, _customFg;
-        private ComboBox _java, _themeMode;
+        private RoundCombo _java, _themeMode;
         private NumericUpDown _mem, _w, _h;
         private CheckBox _fullscreen;
         private string _accentHex;
@@ -588,7 +588,7 @@ namespace EasyerLauncher.Pages
             card1.Controls.Add(browseBtn);
 
             card1.Controls.Add(Mk("Java（用于启动游戏与安装 Forge）", 24, 94));
-            _java = new ComboBox { Bounds = new Rectangle(24, 122, 520, 32), DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat };
+            _java = new RoundCombo { Bounds = new Rectangle(24, 122, 520, 32) };
             var scanBtn = new W11Button { Text = "自动检测", Bounds = new Rectangle(556, 121, 90, 34) };
             scanBtn.Click += (s, e) => ScanJava();
             card1.Controls.Add(scanBtn);
@@ -619,7 +619,7 @@ namespace EasyerLauncher.Pages
             var card2 = new W11Card { Bounds = new Rectangle(x, 360, w1, 330) };
             Controls.Add(card2);
             card2.Controls.Add(Mk("主题模式", 24, 20));
-            _themeMode = new ComboBox { Bounds = new Rectangle(24, 48, 200, 32), DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat };
+            _themeMode = new RoundCombo { Bounds = new Rectangle(24, 48, 200, 32) };
             _themeMode.Items.AddRange(new object[] { "深色（Win11）", "浅色（Win11）", "自定义" });
             _themeMode.SelectedIndex = cfg.ThemeMode == "light" ? 1 : cfg.ThemeMode == "custom" ? 2 : 0;
             card2.Controls.Add(_themeMode);

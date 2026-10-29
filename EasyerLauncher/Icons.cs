@@ -356,7 +356,7 @@ namespace EasyerLauncher
                 });
         }
 
-        /// <summary>离线账号的 Steve 风头像（本地生成，不联网）。</summary>
+        /// <summary>默认头像：标准 Steve 脸（本地生成 8x8，不联网）。像素布局照原版皮肤头部正面。</summary>
         public static Bitmap SteveAvatar(int size)
         {
             var bmp = new Bitmap(size, size);
@@ -371,18 +371,28 @@ namespace EasyerLauncher
                     using var b = new SolidBrush(c);
                     g.FillRectangle(b, x0, y0, Math.Max(1, x1 - x0), Math.Max(1, y1 - y0));
                 }
-                var hair = Color.FromArgb(60, 40, 24);
-                var skin = Color.FromArgb(198, 138, 96);
-                var eye = Color.FromArgb(70, 70, 90);
-                var mouth = Color.FromArgb(120, 70, 50);
+                var hair = Color.FromArgb(47, 31, 23);        // 深棕头发
+                var skin = Color.FromArgb(194, 130, 90);      // 肤色
+                var eyeW = Color.FromArgb(255, 255, 255);     // 眼白
+                var eyeP = Color.FromArgb(78, 62, 134);       // 紫 pupil
+                var nose = Color.FromArgb(106, 64, 40);       // 鼻子
+                var mouth = Color.FromArgb(84, 50, 32);       // 嘴
+                var chin = Color.FromArgb(94, 58, 36);        // 下巴胡茬
+                // 0-1 行：头发整行
                 for (int x = 0; x < 8; x++) { Cell(x, 0, hair); Cell(x, 1, hair); }
-                for (int x = 0; x < 8; x++) Cell(x, 2, x is 0 or 7 ? hair : skin);
-                Cell(1, 3, skin); Cell(2, 3, eye); Cell(3, 3, skin);
-                Cell(4, 3, skin); Cell(5, 3, eye); Cell(6, 3, skin);
-                for (int x = 1; x < 7; x++) Cell(x, 4, skin);
-                Cell(2, 5, skin); Cell(3, 5, mouth); Cell(4, 5, mouth); Cell(5, 5, skin);
-                for (int x = 1; x < 7; x++) Cell(x, 6, skin);
-                for (int x = 1; x < 7; x++) Cell(x, 7, x is 1 or 6 ? skin : Color.FromArgb(150, 100, 66));
+                // 2-3 行：两侧鬓角
+                for (int y = 2; y <= 3; y++)
+                    for (int x = 0; x < 8; x++)
+                        Cell(x, y, x is 0 or 7 ? hair : skin);
+                // 4 行：眼睛（眼白在外、瞳孔相邻居中）
+                Cell(2, 4, eyeW); Cell(3, 4, eyeP); Cell(4, 4, eyeP); Cell(5, 4, eyeW);
+                Cell(0, 4, skin); Cell(1, 4, skin); Cell(6, 4, skin); Cell(7, 4, skin);
+                // 5 行：鼻子
+                for (int x = 0; x < 8; x++) Cell(x, 5, x is 3 or 4 ? nose : skin);
+                // 6 行：嘴
+                for (int x = 0; x < 8; x++) Cell(x, 6, x is 3 or 4 ? mouth : skin);
+                // 7 行：下巴胡茬
+                for (int x = 0; x < 8; x++) Cell(x, 7, x >= 2 && x <= 5 ? chin : skin);
             }
             return bmp;
         }
