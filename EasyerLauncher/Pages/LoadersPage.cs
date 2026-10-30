@@ -35,6 +35,7 @@ namespace EasyerLauncher.Pages
         {
             _main = main;
             Dock = DockStyle.Fill;
+            AutoScroll = true;          // 窗口矮的时候下方安装面板要能滚到
             Build();
             UpdateLoaderSelection();
         }

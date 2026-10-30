@@ -121,6 +121,24 @@ namespace EasyerLauncher
                 }
             }
 
+            if (args.Length > 0 && args[0] == "--scrolltest")
+            {
+                // 滚动诊断：用小增量（触控板典型值）和大增量（鼠标一格）分别验证
+                var form = new MainForm { Size = new Size(1000, 520) };
+                form.Show();
+                form.Navigate("settings");
+                Application.DoEvents();
+                System.Threading.Thread.Sleep(400);
+                foreach (var d in new[] { 40, 40, 40, 120, -120 })
+                    Console.WriteLine(form.ScrollProbe(d));
+                form.Navigate("home");
+                Application.DoEvents();
+                System.Threading.Thread.Sleep(300);
+                Console.WriteLine(form.ScrollProbe(60));
+                form.Close();
+                Environment.Exit(0);
+            }
+
             Application.Run(new MainForm());
         }
     }

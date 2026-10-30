@@ -21,6 +21,7 @@ namespace EasyerLauncher.Pages
         {
             _main = main;
             Dock = DockStyle.Fill;
+            AutoScroll = true;          // 窗口矮的时候下面三张信息卡和日志卡要能滚到
             Build();
             _main.TaskState += OnTaskState;
             Disposed += (s, e) => _main.TaskState -= OnTaskState;

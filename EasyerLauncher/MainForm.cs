@@ -16,6 +16,7 @@ namespace EasyerLauncher
         public Label StatusLabel;
         public W11Button[] NavButtons;
         public Dictionary<string, Control> Pages = new();
+        private SmoothScrollFilter _scroll;
         public string CurrentPage = "";
 
         private ProgressRing _ring;
@@ -79,9 +80,9 @@ namespace EasyerLauncher
             Navigate("home");
             FormClosing += (s, e) => Anim.Shutdown();
             // 滚轮平滑滚动（弹窗不受影响）
-            var smooth = new SmoothScrollFilter(this);
-            Application.AddMessageFilter(smooth);
-            FormClosed += (s, e) => Application.RemoveMessageFilter(smooth);
+            _scroll = new SmoothScrollFilter(this);
+            Application.AddMessageFilter(_scroll);
+            FormClosed += (s, e) => Application.RemoveMessageFilter(_scroll);
         }
 
         private void StartBackgroundChecks()
@@ -387,6 +388,40 @@ namespace EasyerLauncher
         }
 
         /// <summary>加载器装好后刷新主页版本列表（丢弃缓存的主页，下次导航重建）。</summary>
+        /// <summary>诊断：对当前页面施加一次滚动增量，返回滚动前后的位置（验证滚轮/触控板能否滚动）。</summary>
+        public string ScrollProbe(int delta)
+        {
+            var page = Pages.TryGetValue(CurrentPage, out var p) ? p : null;
+            var sc = FindFirstScrollable(page ?? this);
+            if (sc == null)
+                return $"[{CurrentPage}] NO-SCROLLABLE  (没有 AutoScroll 容器，或内容没超出)";
+
+            int before = -sc.AutoScrollPosition.Y;
+            int max = sc.DisplayRectangle.Height - sc.ClientSize.Height;
+            _scroll.Probe(sc, delta);
+
+            // 驱动消息循环把缓动动画跑完（Anim 用的是 WinForms Timer，需要泵消息）
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < 800)
+            {
+                Application.DoEvents();
+                System.Threading.Thread.Sleep(8);
+            }
+            int after = -sc.AutoScrollPosition.Y;
+            return $"[{CurrentPage}] delta={delta,5}  before={before,5}  after={after,5}  moved={after - before,5}  max={max}";
+        }
+
+        private static ScrollableControl FindFirstScrollable(Control c)
+        {
+            if (c is ScrollableControl s && s.AutoScroll && s.DisplayRectangle.Height > s.ClientSize.Height + 2) return s;
+            foreach (Control x in c.Controls)
+            {
+                var r = FindFirstScrollable(x);
+                if (r != null) return r;
+            }
+            return null;
+        }
+
         public void RefreshHomeVersions()
         {
             Pages.Remove("home");
